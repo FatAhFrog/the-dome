@@ -47,6 +47,19 @@ export default function SidePanel() {
           )
         })}
       </div>
+      <div className="side-panel-account" style={{ marginTop: '1rem', borderTop: '1px solid #eee', paddingTop: '0.75rem' }}>
+        <Link
+          href="/profile"
+          className="side-panel-link"
+          style={{
+            color: pathname === '/profile' ? '#FFFFFF' : '#1A1A1A',
+            background: pathname === '/profile' ? '#EB4600' : 'transparent',
+            fontWeight: pathname === '/profile' ? 600 : 400,
+          }}
+        >
+          Profile
+        </Link>
+      </div>
       <button onClick={handleLogout} className="side-panel-logout">
         Log out
       </button>

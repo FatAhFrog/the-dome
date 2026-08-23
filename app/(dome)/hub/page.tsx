@@ -1,4 +1,5 @@
 import HubCard from '@/components/HubCard'
+import TimeWidget from '@/components/TimeWidget'
 
 export default function HubPage() {
   return (
@@ -12,16 +13,16 @@ export default function HubPage() {
         }}
       >
         <HubCard title="🕐 Time">
-          Live clock coming in Act 3.
+          <TimeWidget />
         </HubCard>
         <HubCard title="⛅ Weather">
-          Current conditions coming in Act 3.
+          Current conditions coming soon.
         </HubCard>
         <HubCard title="📰 Daily News">
-          Top headlines coming in Act 3.
+          Top headlines coming soon.
         </HubCard>
         <HubCard title="💬 Quick Chat">
-          Recent messages coming in Act 3/4.
+          Recent messages coming soon.
         </HubCard>
       </div>
     </main>
