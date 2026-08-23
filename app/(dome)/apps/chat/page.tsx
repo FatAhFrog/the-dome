@@ -17,7 +17,7 @@ export default function ChatPage() {
   const [roomId, setRoomId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
-  const messagesEndRef = useRef(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   useEffect(() => {
