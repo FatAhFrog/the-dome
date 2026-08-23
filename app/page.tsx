@@ -6,7 +6,7 @@ export default async function Home() {
 
   return (
     <main style={{ padding: '2rem', fontFamily: 'sans-serif' }}>
-      <h1>The Dome — connection test</h1>
+      <h1 style={{ color: 'var(--color-accent)' }}>The Dome — connection test</h1>
       {error ? (
         <p style={{ color: 'red' }}>Error: {error.message}</p>
       ) : (
