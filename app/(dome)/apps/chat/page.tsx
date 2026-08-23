@@ -106,11 +106,12 @@ export default function ChatPage() {
   if (loading) return <main style={{ padding: '2rem' }}>Loading chat...</main>
 
   return (
-    <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Chat — #general</h1>
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           border: '1px solid #eee',
           borderRadius: '10px',
