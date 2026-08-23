@@ -178,24 +178,31 @@ export default function ProfilePage() {
           </div>
         </label>
         <div>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Push notifications</div>
-
-          {pushStatus === 'granted' ? (
-            <div>✅ Enabled on this device</div>
-
-          ) : pushStatus === 'denied' ? (
-            <div style={{ color: '#999' }}>Blocked — enable notifications for this site in your browser settings.</div>
-
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
+            Push notifications
+          </div>
+          {pushStatus === 'denied' ? (
+            <p style={{ color: '#999', margin: 0, fontSize: '0.9rem' }}>
+              Blocked — enable notifications for this site in your browser settings.
+            </p>
           ) : pushStatus === 'unsupported' ? (
-            <div>Not supported on this browser.</div>
-
+            <p style={{ color: '#999', margin: 0, fontSize: '0.9rem' }}>Not supported on this browser.</p>
           ) : (
             <button
               type="button"
               onClick={handleEnableNotifications}
-              style={{ padding: '0.5rem', background: '#EB4600', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              disabled={pushLoading}
+              style={{
+                padding: '0.4rem 0.8rem',
+                background: '#EB4600',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+              }}
             >
-              {pushLoading ? 'Enabling...' : 'Enable notifications'}
+              {pushLoading ? 'Enabling...' : 'Enable / Refresh notifications'}
             </button>
           )}
         </div>
