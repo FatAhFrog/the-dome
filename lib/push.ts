@@ -10,26 +10,41 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export async function subscribeToPush(): Promise<boolean> {
+  console.log('1. Starting subscribeToPush')
+
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.log('2. Push not supported in this browser')
     return false
   }
 
   const permission = await Notification.requestPermission()
+  console.log('3. Permission result:', permission)
   if (permission !== 'granted') return false
 
   const registration = await navigator.serviceWorker.register('/sw.js')
+  console.log('4. Service worker registered:', registration)
   await navigator.serviceWorker.ready
+  console.log('5. Service worker ready')
 
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-  })
+  let subscription
+  try {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    })
+    console.log('6. Push subscription created:', subscription)
+  } catch (err) {
+    console.error('6-ERROR. pushManager.subscribe failed:', err)
+    return false
+  }
 
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  console.log('7. Current user:', user?.id)
   if (!user) return false
 
   const subJson = subscription.toJSON()
+  console.log('8. Subscription JSON:', subJson)
 
   const { error } = await supabase.from('push_subscriptions').upsert(
     {
@@ -40,6 +55,8 @@ export async function subscribeToPush(): Promise<boolean> {
     },
     { onConflict: 'endpoint' }
   )
+
+  console.log('9. Supabase upsert error:', error)
 
   return !error
 }
