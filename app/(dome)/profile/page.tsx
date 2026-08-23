@@ -13,6 +13,8 @@ export default function ProfilePage() {
   const [username, setUsername] = useState('')
   const [newsCategory, setNewsCategory] = useState('general')
   const [newsEnabled, setNewsEnabled] = useState(true)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -25,13 +27,14 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, news_category, news_enabled')
+        .select('username, news_category, news_enabled, avatar_url')
         .eq('id', user.id)
         .single()
 
       setUsername(profile?.username || '')
       setNewsCategory(profile?.news_category || 'general')
       setNewsEnabled(profile?.news_enabled ?? true)
+      setAvatarUrl(profile?.avatar_url || null)
       setLoading(false)
     }
 
@@ -52,6 +55,45 @@ export default function ProfilePage() {
 
     setSaving(false)
     setMessage(error ? `Error: ${error.message}` : 'Saved!')
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const fileExt = file.name.split('.').pop()
+    const filePath = `${user.id}/avatar.${fileExt}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true })
+
+    if (uploadError) {
+      setMessage(`Error: ${uploadError.message}`)
+      setUploading(false)
+      return
+    }
+
+    const { data: urlData } = await supabase.storage.from('avatars').getPublicUrl(filePath)
+    const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, avatar_url: publicUrl })
+
+    setUploading(false)
+
+    if (updateError) {
+      setMessage(`Error: ${updateError.message}`)
+    } else {
+      setAvatarUrl(publicUrl)
+      setMessage('Avatar updated!')
+    }
   }
 
   const handleLogout = async () => {
@@ -76,6 +118,19 @@ export default function ProfilePage() {
             maxLength={30}
             style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
           />
+        </label>
+        <label>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Photo</div>
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="avatar" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 6 }} />
+          ) : (
+            <div style={{ width: 80, height: 80, border: '1px solid #eee', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>No pic</div>
+          )}
+          <div style={{ marginTop: '0.5rem' }}>
+            <input id="avatar" type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+            <label htmlFor="avatar" style={{ cursor: 'pointer', color: '#EB4600' }}>{uploading ? 'Uploading...' : 'Change photo'}</label>
+          </div>
         </label>
         <label>
           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>

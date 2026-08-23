@@ -8,7 +8,7 @@ type Message = {
   content: string
   created_at: string
   user_id: string
-  profiles: { username: string } | null
+  profiles: { username: string; avatar_url: string | null } | null
 }
 
 export default function ChatPage() {
@@ -38,7 +38,7 @@ export default function ChatPage() {
 
       const { data: msgs } = await supabase
         .from('messages')
-        .select('*, profiles(username)')
+        .select('*, profiles(username, avatar_url)')
         .eq('room_id', room.id)
         .order('created_at', { ascending: true })
 
@@ -61,7 +61,7 @@ export default function ChatPage() {
             const newMsg = payload.new as Message
             const { data: profile } = await supabase
               .from('profiles')
-              .select('username')
+              .select('username, avatar_url')
               .eq('id', newMsg.user_id)
               .single()
             setMessages((current) => [
@@ -121,14 +121,18 @@ export default function ChatPage() {
       >
         {messages.length === 0 && <p style={{ color: '#999' }}>No messages yet — say something!</p>}
         {messages.map((msg) => (
-          <div key={msg.id} style={{ marginBottom: '0.75rem' }}>
-            <p style={{ margin: 0, fontWeight: 600, marginBottom: '0.25rem' }}>
-              {msg.profiles?.username || 'Unknown'}
-            </p>
-            <p style={{ margin: 0 }}>{msg.content}</p>
-            <p style={{ margin: 0, fontSize: '0.75rem', color: '#999' }}>
-              {new Date(msg.created_at).toLocaleTimeString()}
-            </p>
+          <div key={msg.id} style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+            {msg.profiles?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={msg.profiles.avatar_url} alt="avatar" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: '50%' }} />
+            ) : (
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#eee' }} />
+            )}
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: 0, fontWeight: 600, marginBottom: '0.25rem' }}>{msg.profiles?.username || 'Unknown'}</p>
+              <p style={{ margin: 0 }}>{msg.content}</p>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: '#999' }}>{new Date(msg.created_at).toLocaleTimeString()}</p>
+            </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
