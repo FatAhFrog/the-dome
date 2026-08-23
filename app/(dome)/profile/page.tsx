@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { subscribeToPush, getPushPermissionState } from '@/lib/push'
 
 const CATEGORIES = [
   { value: 'general', label: 'General News' },
@@ -15,6 +16,8 @@ export default function ProfilePage() {
   const [newsEnabled, setNewsEnabled] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [pushStatus, setPushStatus] = useState('default')
+  const [pushLoading, setPushLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -39,6 +42,10 @@ export default function ProfilePage() {
     }
 
     loadProfile()
+  }, [])
+
+  useEffect(() => {
+    getPushPermissionState().then((state) => setPushStatus(state))
   }, [])
 
   const handleSave = async (e: React.FormEvent) => {
@@ -96,6 +103,18 @@ export default function ProfilePage() {
     }
   }
 
+  const handleEnableNotifications = async () => {
+    setPushLoading(true)
+    const success = await subscribeToPush()
+    setPushLoading(false)
+    if (success) {
+      setPushStatus('granted')
+      setMessage('Notifications enabled!')
+    } else {
+      setMessage('Could not enable notifications — check your browser permissions.')
+    }
+  }
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -119,6 +138,7 @@ export default function ProfilePage() {
             style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
           />
         </label>
+        
         <label>
           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Photo</div>
           {avatarUrl ? (
@@ -157,6 +177,29 @@ export default function ProfilePage() {
             <span>Show News on Hub and side panel</span>
           </div>
         </label>
+        <div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Push notifications</div>
+
+          {pushStatus === 'granted' ? (
+            <div>✅ Enabled on this device</div>
+
+          ) : pushStatus === 'denied' ? (
+            <div style={{ color: '#999' }}>Blocked — enable notifications for this site in your browser settings.</div>
+
+          ) : pushStatus === 'unsupported' ? (
+            <div>Not supported on this browser.</div>
+
+          ) : (
+            <button
+              type="button"
+              onClick={handleEnableNotifications}
+              style={{ padding: '0.5rem', background: '#EB4600', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+            >
+              {pushLoading ? 'Enabling...' : 'Enable notifications'}
+            </button>
+          )}
+        </div>
+
         {message && <p style={{ color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
         <button
           type="submit"
