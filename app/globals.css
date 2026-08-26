@@ -56,12 +56,13 @@ body {
 
 .side-panel {
   width: 200px;
-  min-height: 100vh;
+  height: 100vh;
   border-right: 1px solid #eee;
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  overflow-y: auto;
 }
 
 .side-panel-brand {
