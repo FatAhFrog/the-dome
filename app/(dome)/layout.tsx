@@ -6,9 +6,11 @@ export default function DomeLayout({
   children: React.ReactNode
 }) {
   return (
-    <div style={{ display: 'flex' }}>
+    <div style={{ display: 'flex', height: '100vh' }}>
       <SidePanel />
-      <div style={{ flex: 1, minHeight: '100vh' }}>{children}</div>
+      <div style={{ flex: 1, height: '100vh', minHeight: 0, overflow: 'hidden' }}>
+        {children}
+      </div>
     </div>
   )
 }
