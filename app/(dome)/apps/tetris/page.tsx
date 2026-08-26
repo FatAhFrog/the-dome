@@ -87,6 +87,7 @@ export default function TetrisPage() {
   const [level, setLevel] = useState(1)
   const [gameOver, setGameOver] = useState(false)
   const [started, setStarted] = useState(false)
+  const [paused, setPaused] = useState(false)
 
   const boardRef = useRef(board)
   const activeRef = useRef(active)
@@ -168,6 +169,7 @@ export default function TetrisPage() {
     setLines(0)
     setLevel(1)
     setGameOver(false)
+    setPaused(false)
     const firstType = randomPiece()
     const secondType = randomPiece()
     setNextType(secondType)
@@ -218,6 +220,8 @@ export default function TetrisPage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!started || gameOver) return
+      if (e.key === 'p' || e.key === 'P') { setPaused((p) => !p); return }
+      if (paused) return
       if (e.key === 'ArrowLeft') tryMove(-1, 0)
       else if (e.key === 'ArrowRight') tryMove(1, 0)
       else if (e.key === 'ArrowDown') tryMove(0, 1)
@@ -226,10 +230,10 @@ export default function TetrisPage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [started, gameOver, tryMove, tryRotate, hardDrop])
+  }, [started, gameOver, paused, tryMove, tryRotate, hardDrop])
 
   useEffect(() => {
-    if (!started || gameOver) return
+    if (!started || gameOver || paused) return
     const speed = Math.max(150, 800 - (level - 1) * 60)
     const interval = setInterval(() => {
       const piece = activeRef.current
@@ -242,7 +246,7 @@ export default function TetrisPage() {
       }
     }, speed)
     return () => clearInterval(interval)
-  }, [started, gameOver, level, lockPiece])
+  }, [started, gameOver, paused, level, lockPiece])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -308,7 +312,26 @@ export default function TetrisPage() {
           height={ROWS * CELL}
           style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
         />
-        {(!started || gameOver) && (
+        {started && !gameOver && !paused && (
+          <button
+            onClick={() => setPaused(true)}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              padding: '0.25rem 0.75rem',
+              background: '#1A1A1A',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+            }}
+          >
+            Pause
+          </button>
+        )}
+        {(!started || gameOver || paused) && (
           <div
             style={{
               position: 'absolute',
@@ -321,9 +344,10 @@ export default function TetrisPage() {
               borderRadius: '8px',
             }}
           >
+            {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
             {gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Game Over! Score: {score}</p>}
             <button
-              onClick={resetGame}
+              onClick={paused ? () => setPaused(false) : resetGame}
               style={{
                 padding: '0.5rem 1.5rem',
                 background: '#EB4600',
@@ -333,14 +357,14 @@ export default function TetrisPage() {
                 cursor: 'pointer',
               }}
             >
-              {gameOver ? 'Play Again' : 'Start Game'}
+              {paused ? 'Resume' : gameOver ? 'Play Again' : 'Start Game'}
             </button>
           </div>
         )}
       </div>
 
       <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>
-        ← → move · ↓ soft drop · ↑ rotate · Space hard drop
+        ← → move · ↓ soft drop · ↑ rotate · Space hard drop · P pause
       </p>
     </main>
   )
