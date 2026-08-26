@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const COLS = 10
 const ROWS = 20
@@ -88,6 +89,8 @@ export default function TetrisPage() {
   const [gameOver, setGameOver] = useState(false)
   const [started, setStarted] = useState(false)
   const [paused, setPaused] = useState(false)
+  const supabase = createClient()
+  const submittedRef = useRef(false)
 
   const boardRef = useRef(board)
   const activeRef = useRef(active)
@@ -169,6 +172,7 @@ export default function TetrisPage() {
     setLines(0)
     setLevel(1)
     setGameOver(false)
+    submittedRef.current = false
     setPaused(false)
     const firstType = randomPiece()
     const secondType = randomPiece()
@@ -176,6 +180,19 @@ export default function TetrisPage() {
     setActive(spawnPiece(firstType))
     setStarted(true)
   }
+
+  const submitScore = useCallback(async (finalScore: number) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('scores').insert({ user_id: user.id, game: 'tetris', score: finalScore })
+  }, [supabase])
+
+  useEffect(() => {
+    if (gameOver && !submittedRef.current) {
+      submittedRef.current = true
+      submitScore(score)
+    }
+  }, [gameOver, score, submitScore])
 
   const tryMove = useCallback((dx: number, dy: number) => {
     const piece = activeRef.current

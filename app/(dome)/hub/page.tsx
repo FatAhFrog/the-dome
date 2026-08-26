@@ -7,6 +7,11 @@ import { createClient } from '@/lib/supabase/server'
 export default async function HubPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  const { data: announcements } = await supabase
+    .from('announcements')
+    .select('title, body, created_at')
+    .order('created_at', { ascending: false })
+    .limit(3)
 
   let newsEnabled = true
   if (user) {
@@ -28,6 +33,18 @@ export default async function HubPage() {
           gap: '1rem',
         }}
       >
+        {announcements && announcements.length > 0 && (
+          <HubCard title="📢 Developer Announcements">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {announcements.map((a, i) => (
+                <div key={i}>
+                  <p style={{ fontWeight: 600, color: '#1A1A1A', marginBottom: '0.15rem' }}>{a.title}</p>
+                  <p style={{ fontSize: '0.85rem' }}>{a.body}</p>
+                </div>
+              ))}
+            </div>
+          </HubCard>
+        )}
         <HubCard title="🕐 Time">
           <TimeWidget />
         </HubCard>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
 
 const GRID_SIZE = 20
 const CELL_SIZE = 20
@@ -28,6 +29,8 @@ export default function SnakePage() {
   const [score, setScore] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [started, setStarted] = useState(false)
+  const supabase = createClient()
+  const submittedRef = useRef(false)
 
   const resetGame = () => {
     const initialSnake = [{ x: 10, y: 10 }]
@@ -37,8 +40,22 @@ export default function SnakePage() {
     lastAppliedDirection.current = { x: 1, y: 0 }
     setScore(0)
     setGameOver(false)
+    submittedRef.current = false
     setStarted(true)
   }
+
+  const submitScore = useCallback(async (finalScore: number) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    await supabase.from('scores').insert({ user_id: user.id, game: 'snake', score: finalScore })
+  }, [supabase])
+
+  useEffect(() => {
+    if (gameOver && !submittedRef.current) {
+      submittedRef.current = true
+      submitScore(score)
+    }
+  }, [gameOver, score, submitScore])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
