@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeToPush, getPushPermissionState } from '@/lib/push'
+import { THEMES, ThemeKey, applyThemeVars, isThemeKey } from '@/lib/themes'
 
 const CATEGORIES = [
   { value: 'general', label: 'General News' },
@@ -17,6 +18,9 @@ export default function ProfilePage() {
   const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
   const [tetrisCrownPiece, setTetrisCrownPiece] = useState('')
   const [nextPreviewSize, setNextPreviewSize] = useState(22)
+  const [activeTheme, setActiveTheme] = useState<ThemeKey>('dome')
+  const [ownedThemes, setOwnedThemes] = useState<{ key: ThemeKey; name: string }[]>([])
+  const [themeSaving, setThemeSaving] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [pushStatus, setPushStatus] = useState('default')
@@ -33,7 +37,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size')
+        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme')
         .eq('id', user.id)
         .single()
 
@@ -44,11 +48,24 @@ export default function ProfilePage() {
       setTetrisCrownEnabled(profile?.tetris_crown_enabled ?? true)
       setTetrisCrownPiece(profile?.tetris_crown_piece || '')
       setNextPreviewSize(profile?.tetris_next_preview_size || 22)
+      setActiveTheme(isThemeKey(profile?.active_theme) ? profile.active_theme : 'dome')
+
+      const { data: purchases } = await supabase.from('theme_purchases').select('theme_key, custom_name').eq('user_id', user.id)
+      setOwnedThemes((purchases || []).filter((p) => isThemeKey(p.theme_key)).map((p) => ({ key: p.theme_key as ThemeKey, name: p.custom_name })))
       setLoading(false)
     }
 
     loadProfile()
   }, [])
+
+  const handleThemeChange = async (key: ThemeKey) => {
+    setThemeSaving(true)
+    setActiveTheme(key)
+    applyThemeVars(key)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) await supabase.from('profiles').upsert({ id: user.id, active_theme: key })
+    setThemeSaving(false)
+  }
 
   useEffect(() => {
     getPushPermissionState().then((state) => setPushStatus(state))
@@ -138,7 +155,7 @@ export default function ProfilePage() {
 
   return (
     <main style={{ padding: '2rem', maxWidth: '400px' }}>
-      <h1 style={{ color: '#EB4600', marginBottom: '1.5rem' }}>Your Profile</h1>
+      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem' }}>Your Profile</h1>
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <label>
           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Username</div>
@@ -163,7 +180,7 @@ export default function ProfilePage() {
           )}
           <div style={{ marginTop: '0.5rem' }}>
             <input id="avatar" type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
-            <label htmlFor="avatar" style={{ cursor: 'pointer', color: '#EB4600' }}>{uploading ? 'Uploading...' : 'Change photo'}</label>
+            <label htmlFor="avatar" style={{ cursor: 'pointer', color: 'var(--color-accent)' }}>{uploading ? 'Uploading...' : 'Change photo'}</label>
           </div>
         </label>
         <label>
@@ -208,7 +225,7 @@ export default function ProfilePage() {
               disabled={pushLoading}
               style={{
                 padding: '0.4rem 0.8rem',
-                background: '#EB4600',
+                background: 'var(--color-accent)',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -267,13 +284,23 @@ export default function ProfilePage() {
           </select>
         </label>
 
+        <div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Dome theme</div>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#999' }}>Buy palettes in the Tetris shop, then pick your favorite here - it re-skins the whole Dome.</p>
+          <select value={activeTheme} onChange={(e) => handleThemeChange(e.target.value as ThemeKey)} disabled={themeSaving} style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}>
+            <option value="dome">{THEMES.dome.label} (default)</option>
+            {ownedThemes.map(({ key, name }) => <option key={key} value={key}>{name} ({THEMES[key].label})</option>)}
+          </select>
+          {ownedThemes.length === 0 && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#999' }}>You do not own any purchased themes yet - earn coins in Tetris and open the shop.</p>}
+        </div>
+
         {message && <p style={{ color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
         <button
           type="submit"
           disabled={saving}
           style={{
             padding: '0.5rem',
-            background: '#EB4600',
+            background: 'var(--color-accent)',
             color: 'white',
             border: 'none',
             borderRadius: '6px',
@@ -288,8 +315,8 @@ export default function ProfilePage() {
           style={{
             padding: '0.5rem',
             background: 'transparent',
-            color: '#EB4600',
-            border: '1px solid #EB4600',
+            color: 'var(--color-accent)',
+            border: '1px solid var(--color-accent)',
             borderRadius: '6px',
             cursor: 'pointer',
           }}

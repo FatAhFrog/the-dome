@@ -1,4 +1,5 @@
 import SidePanel from '@/components/SidePanel'
+import ThemeLoader from '@/components/ThemeLoader'
 
 export default function DomeLayout({
   children,
@@ -7,6 +8,7 @@ export default function DomeLayout({
 }) {
   return (
     <div style={{ display: 'flex', height: '100vh' }}>
+      <ThemeLoader />
       <SidePanel />
       <div
         style={{

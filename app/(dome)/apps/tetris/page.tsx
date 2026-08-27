@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
+import { ThemeKey, THEME_PRICE } from '@/lib/themes'
 
 const COLS = 10
 const ROWS = 20
@@ -76,12 +78,17 @@ type ActivePiece = {
   y: number
 }
 
+const DEFAULT_UPGRADES: TetrisUpgrades = { lowSpawn: false, speedLevel: 0, ghost: false, hold: false }
+const GUARD_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', '/'])
+
 export default function TetrisPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const nextCanvasRef = useRef<HTMLCanvasElement>(null)
+  const holdCanvasRef = useRef<HTMLCanvasElement>(null)
   const [board, setBoard] = useState<Board>(emptyBoard())
   const [active, setActive] = useState<ActivePiece | null>(null)
   const [nextType, setNextType] = useState<string>('I')
+  const [holdType, setHoldType] = useState<string | null>(null)
   const [score, setScore] = useState(0)
   const [lines, setLines] = useState(0)
   const [level, setLevel] = useState(1)
@@ -89,10 +96,18 @@ export default function TetrisPage() {
   const [started, setStarted] = useState(false)
   const [paused, setPaused] = useState(false)
   const [nextCellSize, setNextCellSize] = useState(22)
+  const [coins, setCoins] = useState(0)
+  const [upgrades, setUpgrades] = useState<TetrisUpgrades>(DEFAULT_UPGRADES)
+  const [ownedThemeKeys, setOwnedThemeKeys] = useState<string[]>([])
+  const [shopOpen, setShopOpen] = useState(false)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
   const supabase = createClient()
   const submittedRef = useRef(false)
   const streakTypeRef = useRef<string | null>(null)
   const streakCountRef = useRef(0)
+  const userIdRef = useRef<string | null>(null)
+  const canHoldRef = useRef(true)
+  const holdTypeRef = useRef<string | null>(null)
 
   // Higher DECAY makes repeated pieces rarer faster.
   const DECAY = 12
@@ -125,25 +140,31 @@ export default function TetrisPage() {
 
   const boardRef = useRef(board)
   const activeRef = useRef(active)
-  boardRef.current = board
-  activeRef.current = active
+  const upgradesRef = useRef(upgrades)
+  useEffect(() => {
+    boardRef.current = board
+    activeRef.current = active
+    upgradesRef.current = upgrades
+    holdTypeRef.current = holdType
+  }, [board, active, upgrades, holdType])
 
   useEffect(() => {
-    setNextType(drawPiece())
-  }, [drawPiece])
-
-  useEffect(() => {
-    const loadPreviewSize = async () => {
+    const loadProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      userIdRef.current = user.id
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tetris_next_preview_size')
+        .select('tetris_next_preview_size, coins, tetris_upgrade_low_spawn, tetris_upgrade_speed_level, tetris_upgrade_ghost, tetris_upgrade_hold')
         .eq('id', user.id)
         .single()
       if (profile?.tetris_next_preview_size) setNextCellSize(profile.tetris_next_preview_size)
+      setCoins(profile?.coins ?? 0)
+      setUpgrades({ lowSpawn: profile?.tetris_upgrade_low_spawn ?? false, speedLevel: profile?.tetris_upgrade_speed_level ?? 0, ghost: profile?.tetris_upgrade_ghost ?? false, hold: profile?.tetris_upgrade_hold ?? false })
+      const { data: purchases } = await supabase.from('theme_purchases').select('theme_key').eq('user_id', user.id)
+      setOwnedThemeKeys((purchases || []).map((p) => p.theme_key))
     }
-    loadPreviewSize()
+    loadProfile()
   }, [supabase])
 
   const getCells = (piece: ActivePiece) =>
@@ -159,8 +180,14 @@ export default function TetrisPage() {
   }
 
   const spawnPiece = useCallback((type: string): ActivePiece => {
-    return { type, rotation: 0, x: 3, y: -2 }
+    return { type, rotation: 0, x: 3, y: upgradesRef.current.lowSpawn ? 0 : -2 }
   }, [])
+
+  const ghostPieceFor = (piece: ActivePiece, testBoard: Board): ActivePiece => {
+    let dropped = piece
+    while (isValidPosition({ ...dropped, y: dropped.y + 1 }, testBoard)) dropped = { ...dropped, y: dropped.y + 1 }
+    return dropped
+  }
 
   const lockPiece = useCallback((piece: ActivePiece, currentBoard: Board) => {
     const newBoard = currentBoard.map((row) => [...row])
@@ -193,9 +220,11 @@ export default function TetrisPage() {
         setLevel(1 + Math.floor(newLines / 10))
         return newLines
       })
+      setCoins((c) => c + clearedLines)
     }
 
     setBoard(filteredBoard)
+    canHoldRef.current = true
 
     const newType = nextType
     const upcoming = drawPiece()
@@ -219,6 +248,9 @@ export default function TetrisPage() {
     setGameOver(false)
     submittedRef.current = false
     setPaused(false)
+    setHoldType(null)
+    holdTypeRef.current = null
+    canHoldRef.current = true
     streakTypeRef.current = null
     streakCountRef.current = 0
     const firstType = drawPiece()
@@ -240,6 +272,12 @@ export default function TetrisPage() {
       submitScore(score)
     }
   }, [gameOver, score, submitScore])
+
+  const coinsLoadedRef = useRef(false)
+  useEffect(() => {
+    if (!coinsLoadedRef.current) { coinsLoadedRef.current = true; return }
+    if (userIdRef.current) supabase.from('profiles').update({ coins }).eq('id', userIdRef.current)
+  }, [coins, supabase])
 
   const tryMove = useCallback((dx: number, dy: number) => {
     const piece = activeRef.current
@@ -273,16 +311,33 @@ export default function TetrisPage() {
   const hardDrop = useCallback(() => {
     const piece = activeRef.current
     if (!piece) return
-    let dropped = piece
-    while (isValidPosition({ ...dropped, y: dropped.y + 1 }, boardRef.current)) {
-      dropped = { ...dropped, y: dropped.y + 1 }
-    }
+    const dropped = ghostPieceFor(piece, boardRef.current)
     setActive(dropped)
     lockPiece(dropped, boardRef.current)
   }, [lockPiece])
 
+  const handleHold = useCallback(() => {
+    if (!upgradesRef.current.hold || !canHoldRef.current) return
+    const piece = activeRef.current
+    if (!piece) return
+    canHoldRef.current = false
+    const swapType = holdTypeRef.current
+    holdTypeRef.current = piece.type
+    setHoldType(piece.type)
+    if (swapType === null) {
+      const newType = nextType
+      setNextType(drawPiece())
+      const spawned = spawnPiece(newType)
+      if (!isValidPosition(spawned, boardRef.current)) { setGameOver(true); setActive(null) } else setActive(spawned)
+    } else {
+      const spawned = spawnPiece(swapType)
+      if (!isValidPosition(spawned, boardRef.current)) { setGameOver(true); setActive(null) } else setActive(spawned)
+    }
+  }, [nextType, drawPiece, spawnPiece])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (GUARD_KEYS.has(e.key)) e.preventDefault()
       if (!started || gameOver) return
       if (e.key === 'p' || e.key === 'P') { setPaused((p) => !p); return }
       if (paused) return
@@ -290,15 +345,17 @@ export default function TetrisPage() {
       else if (e.key === 'ArrowRight') tryMove(1, 0)
       else if (e.key === 'ArrowDown') tryMove(0, 1)
       else if (e.key === 'ArrowUp') tryRotate()
-      else if (e.key === ' ') { e.preventDefault(); hardDrop() }
+      else if (e.key === ' ') hardDrop()
+      else if (e.key === '/') handleHold()
     }
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, { passive: false })
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [started, gameOver, paused, tryMove, tryRotate, hardDrop])
+  }, [started, gameOver, paused, tryMove, tryRotate, hardDrop, handleHold])
 
   useEffect(() => {
     if (!started || gameOver || paused) return
-    const speed = Math.max(150, 800 - (level - 1) * 60)
+    const { speedLevel } = upgrades
+    const speed = Math.max(150 + speedLevel * 15, 800 - (level - 1) * Math.max(20, 60 - speedLevel * 6))
     const interval = setInterval(() => {
       const piece = activeRef.current
       if (!piece) return
@@ -310,7 +367,7 @@ export default function TetrisPage() {
       }
     }, speed)
     return () => clearInterval(interval)
-  }, [started, gameOver, paused, level, lockPiece])
+  }, [started, gameOver, paused, level, lockPiece, upgrades])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -330,6 +387,16 @@ export default function TetrisPage() {
       })
     })
 
+    if (active && upgrades.ghost) {
+      const ghost = ghostPieceFor(active, board)
+      if (ghost.y !== active.y) {
+        ctx.save()
+        ctx.globalAlpha = 0.25
+        ctx.fillStyle = COLORS[ghost.type]
+        getCells(ghost).forEach(([x, y]) => { if (y >= 0) ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1) })
+        ctx.restore()
+      }
+    }
     if (active) {
       ctx.fillStyle = COLORS[active.type]
       getCells(active).forEach(([x, y]) => {
@@ -352,10 +419,9 @@ export default function TetrisPage() {
       ctx.lineTo(COLS * CELL, y * CELL)
       ctx.stroke()
     }
-  }, [board, active])
+  }, [board, active, upgrades.ghost])
 
-  const drawNext = useCallback(() => {
-    const canvas = nextCanvasRef.current
+  const drawMiniPiece = (canvas: HTMLCanvasElement | null, type: string | null, size: number) => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -363,7 +429,10 @@ export default function TetrisPage() {
     ctx.fillStyle = '#fafafa'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    const cells = SHAPES[nextType][0]
+    ctx.fillStyle = '#fafafa'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    if (!type) return
+    const cells = SHAPES[type][0]
     const xs = cells.map(([x]) => x)
     const ys = cells.map(([, y]) => y)
     const pieceWidth = Math.max(...xs) - Math.min(...xs) + 1
@@ -371,23 +440,58 @@ export default function TetrisPage() {
     const offsetX = (4 - pieceWidth) / 2 - Math.min(...xs)
     const offsetY = (4 - pieceHeight) / 2 - Math.min(...ys)
 
-    ctx.fillStyle = COLORS[nextType]
+    ctx.fillStyle = COLORS[type]
     cells.forEach(([x, y]) => {
-      ctx.fillRect((x + offsetX) * nextCellSize, (y + offsetY) * nextCellSize, nextCellSize - 1, nextCellSize - 1)
+      ctx.fillRect((x + offsetX) * size, (y + offsetY) * size, size - 1, size - 1)
     })
-  }, [nextType, nextCellSize])
+  }
 
   useEffect(() => {
     draw()
   }, [draw])
 
   useEffect(() => {
-    drawNext()
-  }, [drawNext])
+    drawMiniPiece(nextCanvasRef.current, nextType, nextCellSize)
+  }, [nextType, nextCellSize])
+
+  useEffect(() => {
+    drawMiniPiece(holdCanvasRef.current, holdType, nextCellSize)
+  }, [holdType, nextCellSize])
+
+  const buyUpgrade = async (key: 'lowSpawn' | 'speed' | 'ghost' | 'hold') => {
+    const userId = userIdRef.current
+    if (!userId || busyKey) return
+    const price = key === 'speed' ? speedLevelPrice(upgrades.speedLevel) : UPGRADE_PRICES[key]
+    if (key === 'speed' && upgrades.speedLevel >= MAX_SPEED_LEVEL) return
+    if (key !== 'speed' && upgrades[key]) return
+    if (coins < price) return
+    setBusyKey(key)
+    const nextUpgrades = key === 'speed' ? { ...upgrades, speedLevel: upgrades.speedLevel + 1 } : { ...upgrades, [key]: true }
+    const column = key === 'speed' ? 'tetris_upgrade_speed_level' : key === 'lowSpawn' ? 'tetris_upgrade_low_spawn' : `tetris_upgrade_${key}`
+    const { error } = await supabase.from('profiles').update({ coins: coins - price, [column]: key === 'speed' ? nextUpgrades.speedLevel : true }).eq('id', userId)
+    if (!error) { setCoins(coins - price); setUpgrades(nextUpgrades) }
+    setBusyKey(null)
+  }
+
+  const buyTheme = async (themeKey: ThemeKey, customName: string) => {
+    const userId = userIdRef.current
+    if (!userId || busyKey || coins < THEME_PRICE || ownedThemeKeys.includes(themeKey)) return
+    setBusyKey(`theme:${themeKey}`)
+    const { error } = await supabase.from('theme_purchases').insert({ user_id: userId, theme_key: themeKey, custom_name: customName })
+    if (!error) {
+      await supabase.from('profiles').update({ coins: coins - THEME_PRICE }).eq('id', userId)
+      setCoins(coins - THEME_PRICE)
+      setOwnedThemeKeys((keys) => [...keys, themeKey])
+    }
+    setBusyKey(null)
+  }
 
   return (
     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Tetris</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+        <h1 style={{ color: 'var(--color-accent)', margin: 0 }}>Tetris</h1>
+        <button onClick={() => setShopOpen(true)} style={{ padding: '0.4rem 0.9rem', background: 'var(--color-accent)', color: 'var(--color-on-accent, #fff)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Shop - Coins {coins}</button>
+      </div>
 
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -404,25 +508,6 @@ export default function TetrisPage() {
             height={ROWS * CELL}
             style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
           />
-          {started && !gameOver && !paused && (
-            <button
-              onClick={() => setPaused(true)}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                padding: '0.25rem 0.75rem',
-                background: '#1A1A1A',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-              }}
-            >
-              Pause
-            </button>
-          )}
           {(!started || gameOver || paused) && (
             <div
               style={{
@@ -442,8 +527,8 @@ export default function TetrisPage() {
                 onClick={paused ? () => setPaused(false) : resetGame}
                 style={{
                   padding: '0.5rem 1.5rem',
-                  background: '#EB4600',
-                  color: 'white',
+                  background: 'var(--color-accent)',
+                  color: 'var(--color-on-accent, #fff)',
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -456,27 +541,23 @@ export default function TetrisPage() {
           </div>
         </div>
 
-        <div
-          style={{
-            border: '2px solid #1A1A1A',
-            borderRadius: '8px',
-            padding: '15px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '0.5rem',
-          }}
-        >
-          <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em' }}>
-            NEXT
-          </p>
-          <canvas ref={nextCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div style={{ border: '2px solid #1A1A1A', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>NEXT</p>
+            <canvas ref={nextCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
+          </div>
+          {upgrades.hold && <div style={{ border: '2px solid #1A1A1A', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>HOLD</p>
+            <canvas ref={holdCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
+          </div>}
+          {started && !gameOver && <button onClick={() => setPaused((p) => !p)} style={{ padding: '0.5rem 0.75rem', background: '#1A1A1A', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{paused ? 'Resume' : 'Pause'}</button>}
         </div>
       </div>
 
       <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>
-        ← → move · ↓ soft drop · ↑ rotate · Space hard drop · P pause
+        ← → move · ↓ soft drop · ↑ rotate · Space hard drop · P pause{upgrades.hold && ' · / hold'}
       </p>
+      <ShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} ownedThemeKeys={ownedThemeKeys} busyKey={busyKey} onBuyUpgrade={buyUpgrade} onBuyTheme={buyTheme} />
     </main>
   )
 }
