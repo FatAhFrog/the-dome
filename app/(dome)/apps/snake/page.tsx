@@ -29,6 +29,7 @@ export default function SnakePage() {
   const [score, setScore] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [started, setStarted] = useState(false)
+  const [paused, setPaused] = useState(false)
   const supabase = createClient()
   const submittedRef = useRef(false)
 
@@ -40,6 +41,7 @@ export default function SnakePage() {
     lastAppliedDirection.current = { x: 1, y: 0 }
     setScore(0)
     setGameOver(false)
+    setPaused(false)
     submittedRef.current = false
     setStarted(true)
   }
@@ -59,6 +61,11 @@ export default function SnakePage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'p' || e.key === 'P') {
+        if (started && !gameOver) setPaused((currentPaused) => !currentPaused)
+        return
+      }
+      if (paused) return
       const dir = lastAppliedDirection.current
       if (e.key === 'ArrowUp' && dir.y === 0) directionRef.current = { x: 0, y: -1 }
       else if (e.key === 'ArrowDown' && dir.y === 0) directionRef.current = { x: 0, y: 1 }
@@ -67,10 +74,10 @@ export default function SnakePage() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [started, gameOver, paused])
 
   useEffect(() => {
-    if (!started || gameOver) return
+    if (!started || gameOver || paused) return
 
     const interval = setInterval(() => {
       const moveDirection = directionRef.current
@@ -105,7 +112,7 @@ export default function SnakePage() {
     }, 120)
 
     return () => clearInterval(interval)
-  }, [started, gameOver, food])
+  }, [started, gameOver, paused, food])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -141,7 +148,26 @@ export default function SnakePage() {
           height={CANVAS_SIZE}
           style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
         />
-        {(!started || gameOver) && (
+        {started && !gameOver && !paused && (
+          <button
+            onClick={() => setPaused(true)}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              padding: '0.25rem 0.75rem',
+              background: '#1A1A1A',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+            }}
+          >
+            Pause
+          </button>
+        )}
+        {(!started || gameOver || paused) && (
           <div
             style={{
               position: 'absolute',
@@ -154,9 +180,10 @@ export default function SnakePage() {
               borderRadius: '8px',
             }}
           >
+            {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
             {gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Game Over! Score: {score}</p>}
             <button
-              onClick={resetGame}
+              onClick={paused ? () => setPaused(false) : resetGame}
               style={{
                 padding: '0.5rem 1.5rem',
                 background: '#EB4600',
@@ -166,13 +193,13 @@ export default function SnakePage() {
                 cursor: 'pointer',
               }}
             >
-              {gameOver ? 'Play Again' : 'Start Game'}
+              {paused ? 'Resume' : gameOver ? 'Play Again' : 'Start Game'}
             </button>
           </div>
         )}
       </div>
 
-      <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>Use arrow keys to move</p>
+      <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>Use arrow keys to move · P pause</p>
     </main>
   )
 }
