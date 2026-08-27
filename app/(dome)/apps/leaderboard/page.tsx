@@ -65,8 +65,8 @@ export default async function LeaderboardPage() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
       <h1 style={{ color: '#EB4600', marginBottom: '1.5rem', fontFamily: '"Press Start 2P", monospace', fontSize: '1.3rem' }}>LEADERBOARD</h1>
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        <ArcadePanel title="🐍 SNAKE" rows={snakeScores} />
-        <ArcadePanel title="🧱 TETRIS" rows={tetrisScores} />
+        <ArcadePanel title="SNAKE" rows={snakeScores} />
+        <ArcadePanel title="TETRIS" rows={tetrisScores} />
       </div>
     </main>
   )
