@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react'
+import WeatherIcon from '@/components/WeatherIcon'
 
 type Forecast = {
   current: { temperature: number; weathercode: number }
@@ -57,21 +58,49 @@ export default function WeatherPage() {
     <main style={{ padding: '2rem' }}>
       <h1 style={{ color: '#EB4600' }}>Weather</h1>
 
-      <div style={{ marginTop: '1rem', marginBottom: '1.5rem' }}>
-        <div style={{ fontSize: '2rem', fontWeight: 700 }}>{forecast.current.temperature}°F</div>
-        <div style={{ color: '#666' }}>{weatherDescriptions[forecast.current.weathercode] || 'Unknown conditions'}</div>
+      <div
+        style={{
+          background: 'linear-gradient(180deg, #5b9bd9 0%, #2f6fb0 100%)',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '1rem',
+          marginBottom: '1.5rem',
+          maxWidth: '320px',
+        }}
+      >
+        <WeatherIcon code={forecast.current.weathercode} size={70} />
+        <div>
+          <div style={{ fontSize: '2.2rem', fontWeight: 700 }}>{forecast.current.temperature}°F</div>
+          <div style={{ opacity: 0.9 }}>{weatherDescriptions[forecast.current.weathercode] || 'Unknown conditions'}</div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
         {forecast.daily.map((day, i) => (
-          <div key={day.date} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '0.75rem' }}>
-            <div style={{ fontWeight: 600 }}>
-              {i === 0 ? 'Today' : new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' })}
+          <div
+            key={day.date}
+            style={{
+              background: 'linear-gradient(180deg, #5b9bd9 0%, #2f6fb0 100%)',
+              borderRadius: '10px',
+              padding: '1rem 0.75rem',
+              color: 'white',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.35rem',
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+              {i === 0 ? 'TODAY' : new Date(day.date).toLocaleDateString(undefined, { weekday: 'short' }).toUpperCase()}
             </div>
-            <div style={{ color: '#666', fontSize: '0.9rem', marginBottom: '0.5rem' }}>{weatherDescriptions[day.weathercode] || ''}</div>
-            <div>
-              <strong>{day.max}°</strong> / {day.min}°
-            </div>
+            <WeatherIcon code={day.weathercode} size={56} />
+            <div style={{ fontSize: '0.75rem', letterSpacing: '0.02em' }}>{(weatherDescriptions[day.weathercode] || '').toUpperCase()}</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{day.max}°</div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>{day.min}° low</div>
           </div>
         ))}
       </div>

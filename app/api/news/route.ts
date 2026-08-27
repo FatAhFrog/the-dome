@@ -15,7 +15,9 @@ const decodeEntities = (str: string) =>
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
 
-type CacheEntry = { items: { title: string; link: string }[]; timestamp: number }
+  const stripHtml = (str: string) => str.replace(/<[^>]*>/g, '').trim()
+
+  type CacheEntry = { items: { title: string; link: string; thumbnail: string | null; blurb: string }[]; timestamp: number }
 const cache: Record<string, CacheEntry> = {}
 const CACHE_DURATION = 2 * 60 * 1000 // 2 minutes
 
@@ -43,10 +45,15 @@ export async function GET(request: Request) {
         const linkTag = block.match(/<link[^>]*href="([^"]*)"/) || block.match(/<link>([\s\S]*?)<\/link>/)
         const link = linkTag?.[1] || '#'
         const thumbnail = block.match(/<media:thumbnail[^>]*url="([^"]*)"/)?.[1] || null
+        const descMatch = block.match(/<description[^>]*>([\s\S]*?)<\/description>/) || block.match(/<summary[^>]*>([\s\S]*?)<\/summary>/)
+        const rawBlurb = descMatch?.[1] || ''
+        const cleanedBlurb = decodeEntities(stripHtml(rawBlurb.replace('<![CDATA[', '').replace(']]>', '')))
+        const blurb = cleanedBlurb.length > 160 ? cleanedBlurb.slice(0, 157).trim() + '...' : cleanedBlurb || 'Read the full story at the source.'
         return {
           title: decodeEntities(title.replace('<![CDATA[', '').replace(']]>', '').trim()),
           link: link.trim(),
           thumbnail,
+          blurb,
         }
       })
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import WeatherIcon from './WeatherIcon'
 
 type WeatherData = {
   temperature: number
@@ -64,11 +65,14 @@ export default function WeatherWidget() {
   if (!weather) return <p style={{ color: '#999' }}>Loading...</p>
 
   return (
-    <div>
-      <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>{weather.temperature}°F</p>
-      <p style={{ fontSize: '0.9rem', color: '#666' }}>
-        {weatherDescriptions[weather.weathercode] || 'Unknown conditions'}
-      </p>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+      <WeatherIcon code={weather.weathercode} size={40} />
+      <div>
+        <p style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>{weather.temperature}°F</p>
+        <p style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>
+          {weatherDescriptions[weather.weathercode] || 'Unknown conditions'}
+        </p>
+      </div>
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import TetrisChampionBadge from '@/components/TetrisChampionBadge'
 
 type Message = {
   id: string
@@ -16,9 +17,36 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('')
   const [roomId, setRoomId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [champion, setChampion] = useState<{ id: string; enabled: boolean; piece: string | null } | null>(null)
   const supabase = createClient()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+
+  useEffect(() => {
+    const loadChampion = async () => {
+      const { data: top } = await supabase
+        .from('scores')
+        .select('user_id')
+        .eq('game', 'tetris')
+        .order('score', { ascending: false })
+        .limit(1)
+        .single()
+      if (!top) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tetris_crown_enabled, tetris_crown_piece')
+        .eq('id', top.user_id)
+        .single()
+
+      setChampion({
+        id: top.user_id,
+        enabled: profile?.tetris_crown_enabled ?? true,
+        piece: profile?.tetris_crown_piece || null,
+      })
+    }
+    loadChampion()
+  }, [supabase])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -129,7 +157,10 @@ export default function ChatPage() {
               <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#eee' }} />
             )}
             <div style={{ flex: 1 }}>
-              <p style={{ margin: 0, fontWeight: 600, marginBottom: '0.25rem' }}>{msg.profiles?.username || 'Unknown'}</p>
+              <p style={{ margin: 0, fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                {msg.profiles?.username || 'Unknown'}
+                {champion?.id === msg.user_id && champion.enabled && <TetrisChampionBadge piece={champion.piece} />}
+              </p>
               <p style={{ margin: 0 }}>{msg.content}</p>
               <p style={{ margin: 0, fontSize: '0.75rem', color: '#999' }}>{new Date(msg.created_at).toLocaleTimeString()}</p>
             </div>

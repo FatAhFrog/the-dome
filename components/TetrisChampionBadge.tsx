@@ -1,51 +1,48 @@
-const RAINBOW = ['#00c2c2', '#FFAE00', '#a259ff', '#3ddc84', '#EB4600', '#3b82f6', '#ff7a1a']
+const COLORS: Record<string, string> = {
+  I: '#00c2c2', O: '#FFAE00', T: '#a259ff', S: '#3ddc84', Z: '#EB4600', J: '#3b82f6', L: '#ff7a1a',
+}
 
-export default function TetrisChampionBadge({
-  username,
-  enabled,
-  customColor,
-}: {
-  username: string
-  enabled: boolean
-  customColor?: string | null
-}) {
-  if (!enabled) {
-    return <strong>{username}</strong>
-  }
+const ICON_SHAPES: Record<string, number[][]> = {
+  I: [[0, 0], [1, 0], [2, 0], [3, 0]],
+  O: [[0, 0], [1, 0], [0, 1], [1, 1]],
+  T: [[0, 0], [1, 0], [2, 0], [1, 1]],
+  S: [[1, 0], [2, 0], [0, 1], [1, 1]],
+  Z: [[0, 0], [1, 0], [1, 1], [2, 1]],
+  J: [[0, 0], [0, 1], [1, 1], [2, 1]],
+  L: [[2, 0], [0, 1], [1, 1], [2, 1]],
+}
+
+export default function TetrisChampionBadge({ piece }: { piece: string | null }) {
+  const cellPx = 6
+  const shape = piece ? ICON_SHAPES[piece] : [[0, 0], [1, 0], [0, 1], [1, 1]]
+  const gridWidth = Math.max(...shape.map(([x]) => x)) + 1
+  const color = piece ? COLORS[piece] : '#FFAE00'
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-      <span
-        style={{
-          display: 'inline-grid',
-          gridTemplateColumns: 'repeat(2, 6px)',
-          gridTemplateRows: 'repeat(2, 6px)',
-          gap: '1px',
-        }}
-      >
-        {[0, 1, 2, 3].map((i) => (
-          <span
-            key={i}
-            style={{
-              width: 6,
-              height: 6,
-              background: customColor || RAINBOW[i % RAINBOW.length],
-              borderRadius: 1,
-            }}
-          />
-        ))}
-      </span>
-      <strong>
-        {customColor ? (
-          <span style={{ color: customColor }}>{username}</span>
-        ) : (
-          username.split('').map((ch, i) => (
-            <span key={i} style={{ color: RAINBOW[i % RAINBOW.length] }}>
-              {ch}
-            </span>
-          ))
-        )}
-      </strong>
+    <span
+      title="Reigning Tetris champion"
+      style={{
+        position: 'relative',
+        display: 'inline-block',
+        width: gridWidth * cellPx,
+        height: 2 * cellPx,
+        verticalAlign: 'middle',
+      }}
+    >
+      {shape.map(([x, y], i) => (
+        <span
+          key={i}
+          style={{
+            position: 'absolute',
+            left: x * cellPx,
+            top: y * cellPx,
+            width: cellPx - 1,
+            height: cellPx - 1,
+            background: color,
+            borderRadius: 1,
+          }}
+        />
+      ))}
     </span>
   )
 }

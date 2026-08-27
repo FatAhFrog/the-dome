@@ -15,7 +15,8 @@ export default function ProfilePage() {
   const [newsCategory, setNewsCategory] = useState('general')
   const [newsEnabled, setNewsEnabled] = useState(true)
   const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
-  const [tetrisCrownColor, setTetrisCrownColor] = useState('')
+  const [tetrisCrownPiece, setTetrisCrownPiece] = useState('')
+  const [nextPreviewSize, setNextPreviewSize] = useState(22)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [pushStatus, setPushStatus] = useState('default')
@@ -32,7 +33,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_color')
+        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size')
         .eq('id', user.id)
         .single()
 
@@ -41,7 +42,8 @@ export default function ProfilePage() {
       setNewsEnabled(profile?.news_enabled ?? true)
       setAvatarUrl(profile?.avatar_url || null)
       setTetrisCrownEnabled(profile?.tetris_crown_enabled ?? true)
-      setTetrisCrownColor(profile?.tetris_crown_color || '')
+      setTetrisCrownPiece(profile?.tetris_crown_piece || '')
+      setNextPreviewSize(profile?.tetris_next_preview_size || 22)
       setLoading(false)
     }
 
@@ -68,7 +70,8 @@ export default function ProfilePage() {
         news_category: newsCategory,
         news_enabled: newsEnabled,
         tetris_crown_enabled: tetrisCrownEnabled,
-        tetris_crown_color: tetrisCrownColor.trim() || null,
+        tetris_crown_piece: tetrisCrownPiece || null,
+        tetris_next_preview_size: nextPreviewSize,
       })
 
     setSaving(false)
@@ -228,31 +231,41 @@ export default function ProfilePage() {
               checked={tetrisCrownEnabled}
               onChange={(e) => setTetrisCrownEnabled(e.target.checked)}
             />
-            <span>Show special styling if I&apos;m #1 on the Tetris leaderboard</span>
+            <span>Show a badge next to my name in Chat if I&apos;m #1 on the Tetris leaderboard</span>
           </div>
           {tetrisCrownEnabled && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                type="color"
-                value={tetrisCrownColor || '#EB4600'}
-                onChange={(e) => setTetrisCrownColor(e.target.value)}
-                style={{ width: 40, height: 32, padding: 0, border: '1px solid #ccc', borderRadius: '4px' }}
-              />
-              <span style={{ fontSize: '0.85rem', color: '#666' }}>
-                Custom color {tetrisCrownColor && '(overrides the default rainbow)'}
-              </span>
-              {tetrisCrownColor && (
-                <button
-                  type="button"
-                  onClick={() => setTetrisCrownColor('')}
-                  style={{ fontSize: '0.8rem', color: '#EB4600', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  Reset to default
-                </button>
-              )}
-            </div>
+            <select
+              value={tetrisCrownPiece}
+              onChange={(e) => setTetrisCrownPiece(e.target.value)}
+              style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
+            >
+              <option value="">Default (gold block)</option>
+              <option value="I">I-piece (cyan)</option>
+              <option value="O">O-piece (yellow)</option>
+              <option value="T">T-piece (purple)</option>
+              <option value="S">S-piece (green)</option>
+              <option value="Z">Z-piece (red)</option>
+              <option value="J">J-piece (blue)</option>
+              <option value="L">L-piece (orange)</option>
+            </select>
           )}
         </div>
+
+        <label>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
+            Tetris &quot;Next Piece&quot; preview size
+          </div>
+          <select
+            value={nextPreviewSize}
+            onChange={(e) => setNextPreviewSize(Number(e.target.value))}
+            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
+          >
+            <option value={16}>Small</option>
+            <option value={22}>Medium (default)</option>
+            <option value={28}>Large</option>
+            <option value={34}>Extra Large</option>
+          </select>
+        </label>
 
         {message && <p style={{ color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
         <button

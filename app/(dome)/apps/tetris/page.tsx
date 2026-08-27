@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/client'
 const COLS = 10
 const ROWS = 20
 const CELL = 24
-const NEXT_CELL = 22
 
 type Cell = string | null
 type Board = Cell[][]
@@ -68,8 +67,6 @@ const SHAPES: Record<string, number[][][]> = {
 
 const PIECE_TYPES = Object.keys(SHAPES)
 
-const randomPiece = () => PIECE_TYPES[Math.floor(Math.random() * PIECE_TYPES.length)]
-
 const emptyBoard = (): Board => Array.from({ length: ROWS }, () => Array(COLS).fill(null))
 
 type ActivePiece = {
@@ -91,8 +88,40 @@ export default function TetrisPage() {
   const [gameOver, setGameOver] = useState(false)
   const [started, setStarted] = useState(false)
   const [paused, setPaused] = useState(false)
+  const [nextCellSize, setNextCellSize] = useState(22)
   const supabase = createClient()
   const submittedRef = useRef(false)
+  const streakTypeRef = useRef<string | null>(null)
+  const streakCountRef = useRef(0)
+
+  // Higher DECAY makes repeated pieces rarer faster.
+  const DECAY = 12
+
+  const drawPiece = useCallback(() => {
+    const weights = PIECE_TYPES.map((type) => {
+      if (type === streakTypeRef.current) {
+        if (streakCountRef.current >= 3) return 0
+        return 1 / Math.pow(DECAY, streakCountRef.current)
+      }
+      return 1
+    })
+    const total = weights.reduce((a, b) => a + b, 0)
+    let r = Math.random() * total
+    let chosen = PIECE_TYPES[PIECE_TYPES.length - 1]
+    for (let i = 0; i < PIECE_TYPES.length; i++) {
+      r -= weights[i]
+      if (r <= 0) { chosen = PIECE_TYPES[i]; break }
+    }
+
+    if (chosen === streakTypeRef.current) {
+      streakCountRef.current += 1
+    } else {
+      streakTypeRef.current = chosen
+      streakCountRef.current = 1
+    }
+
+    return chosen
+  }, [])
 
   const boardRef = useRef(board)
   const activeRef = useRef(active)
@@ -100,8 +129,22 @@ export default function TetrisPage() {
   activeRef.current = active
 
   useEffect(() => {
-    setNextType(randomPiece())
-  }, [])
+    setNextType(drawPiece())
+  }, [drawPiece])
+
+  useEffect(() => {
+    const loadPreviewSize = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tetris_next_preview_size')
+        .eq('id', user.id)
+        .single()
+      if (profile?.tetris_next_preview_size) setNextCellSize(profile.tetris_next_preview_size)
+    }
+    loadPreviewSize()
+  }, [supabase])
 
   const getCells = (piece: ActivePiece) =>
     SHAPES[piece.type][piece.rotation].map(([dx, dy]) => [piece.x + dx, piece.y + dy])
@@ -155,7 +198,7 @@ export default function TetrisPage() {
     setBoard(filteredBoard)
 
     const newType = nextType
-    const upcoming = randomPiece()
+    const upcoming = drawPiece()
     setNextType(upcoming)
     const spawned = spawnPiece(newType)
 
@@ -165,7 +208,7 @@ export default function TetrisPage() {
     } else {
       setActive(spawned)
     }
-  }, [nextType, spawnPiece, level])
+  }, [nextType, spawnPiece, level, drawPiece])
 
   const resetGame = () => {
     const fresh = emptyBoard()
@@ -176,8 +219,10 @@ export default function TetrisPage() {
     setGameOver(false)
     submittedRef.current = false
     setPaused(false)
-    const firstType = randomPiece()
-    const secondType = randomPiece()
+    streakTypeRef.current = null
+    streakCountRef.current = 0
+    const firstType = drawPiece()
+    const secondType = drawPiece()
     setNextType(secondType)
     setActive(spawnPiece(firstType))
     setStarted(true)
@@ -328,9 +373,9 @@ export default function TetrisPage() {
 
     ctx.fillStyle = COLORS[nextType]
     cells.forEach(([x, y]) => {
-      ctx.fillRect((x + offsetX) * NEXT_CELL, (y + offsetY) * NEXT_CELL, NEXT_CELL - 1, NEXT_CELL - 1)
+      ctx.fillRect((x + offsetX) * nextCellSize, (y + offsetY) * nextCellSize, nextCellSize - 1, nextCellSize - 1)
     })
-  }, [nextType])
+  }, [nextType, nextCellSize])
 
   useEffect(() => {
     draw()
@@ -344,14 +389,15 @@ export default function TetrisPage() {
     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Tetris</h1>
 
-      <div style={{ display: 'flex', gap: '2rem', marginBottom: '1rem' }}>
-        <p>Score: {score}</p>
-        <p>Lines: {lines}</p>
-        <p>Level: {level}</p>
-      </div>
-
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
-        <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '2rem', marginBottom: '1rem', width: COLS * CELL, justifyContent: 'center' }}>
+            <p>Score: {score}</p>
+            <p>Lines: {lines}</p>
+            <p>Level: {level}</p>
+          </div>
+
+          <div style={{ position: 'relative' }}>
           <canvas
             ref={canvasRef}
             width={COLS * CELL}
@@ -407,6 +453,7 @@ export default function TetrisPage() {
               </button>
             </div>
           )}
+          </div>
         </div>
 
         <div
@@ -423,7 +470,7 @@ export default function TetrisPage() {
           <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em' }}>
             NEXT
           </p>
-          <canvas ref={nextCanvasRef} width={4 * NEXT_CELL} height={4 * NEXT_CELL} />
+          <canvas ref={nextCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
         </div>
       </div>
 
