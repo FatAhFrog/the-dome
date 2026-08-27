@@ -17,6 +17,7 @@ const weatherDescriptions: Record<number, string> = {
 
 export default function WeatherPage() {
   const [forecast, setForecast] = useState<Forecast | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchWeather = async (lat: number, lon: number) => {
@@ -39,6 +40,8 @@ export default function WeatherPage() {
         })
       } catch {
         setForecast(null)
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -52,13 +55,11 @@ export default function WeatherPage() {
     }
   }, [])
 
-  if (!forecast) return <main style={{ padding: '2rem' }}>Loading...</main>
-
   return (
     <main style={{ padding: '2rem' }}>
       <h1 style={{ color: '#EB4600' }}>Weather</h1>
 
-      <div
+      {forecast ? <div
         style={{
           background: 'linear-gradient(180deg, #5b9bd9 0%, #2f6fb0 100%)',
           borderRadius: '12px',
@@ -76,10 +77,12 @@ export default function WeatherPage() {
           <div style={{ fontSize: '2.2rem', fontWeight: 700 }}>{forecast.current.temperature}°F</div>
           <div style={{ opacity: 0.9 }}>{weatherDescriptions[forecast.current.weathercode] || 'Unknown conditions'}</div>
         </div>
-      </div>
+      </div> : <div style={{ background: '#f0f0f0', borderRadius: '12px', height: '84px', maxWidth: '320px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '0.85rem' }}>
+        {loading ? 'Loading conditions...' : 'Weather unavailable'}
+      </div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
-        {forecast.daily.map((day, i) => (
+        {forecast ? forecast.daily.map((day, i) => (
           <div
             key={day.date}
             style={{
@@ -101,6 +104,10 @@ export default function WeatherPage() {
             <div style={{ fontSize: '0.75rem', letterSpacing: '0.02em' }}>{(weatherDescriptions[day.weathercode] || '').toUpperCase()}</div>
             <div style={{ fontSize: '1.6rem', fontWeight: 700 }}>{day.max}°</div>
             <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>{day.min}° low</div>
+          </div>
+        )) : Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} style={{ background: '#f5f5f5', borderRadius: '8px', padding: '0.75rem', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: '0.8rem' }}>
+            {loading ? '...' : 'N/A'}
           </div>
         ))}
       </div>

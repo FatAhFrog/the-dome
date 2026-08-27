@@ -2,6 +2,7 @@ import HubCard from '@/components/HubCard'
 import TimeWidget from '@/components/TimeWidget'
 import WeatherWidget from '@/components/WeatherWidget'
 import NewsWidget from '@/components/NewsWidget'
+import QuickChatWidget from '@/components/QuickChatWidget'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function HubPage() {
@@ -57,7 +58,7 @@ export default async function HubPage() {
           </HubCard>
         )}
         <HubCard title="💬 Quick Chat">
-          Recent messages coming soon.
+          <QuickChatWidget />
         </HubCard>
       </div>
     </main>
