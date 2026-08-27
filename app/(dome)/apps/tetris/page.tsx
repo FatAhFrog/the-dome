@@ -80,6 +80,7 @@ type ActivePiece = {
 
 const DEFAULT_UPGRADES: TetrisUpgrades = { lowSpawn: false, speedLevel: 0, ghost: false, hold: false }
 const GUARD_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', '/'])
+const LOW_SPAWN_START_LEVEL = 2
 
 export default function TetrisPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -244,7 +245,7 @@ export default function TetrisPage() {
     setBoard(fresh)
     setScore(0)
     setLines(0)
-    setLevel(1)
+    setLevel(upgradesRef.current.lowSpawn ? LOW_SPAWN_START_LEVEL : 1)
     setGameOver(false)
     submittedRef.current = false
     setPaused(false)
@@ -263,7 +264,8 @@ export default function TetrisPage() {
   const submitScore = useCallback(async (finalScore: number) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    await supabase.from('scores').insert({ user_id: user.id, game: 'tetris', score: finalScore })
+    const adjustedScore = upgradesRef.current.lowSpawn ? Math.round(finalScore * 1.1) : finalScore
+    await supabase.from('scores').insert({ user_id: user.id, game: 'tetris', score: adjustedScore })
   }, [supabase])
 
   useEffect(() => {
@@ -522,7 +524,7 @@ export default function TetrisPage() {
               }}
             >
               {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
-              {gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Game Over! Score: {score}</p>}
+              {gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Game Over! Score: {upgrades.lowSpawn ? Math.round(score * 1.1) : score}</p>}
               <button
                 onClick={paused ? () => setPaused(false) : resetGame}
                 style={{

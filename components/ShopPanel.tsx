@@ -11,7 +11,7 @@ export type TetrisUpgrades = {
 }
 
 export const UPGRADE_PRICES = {
-  lowSpawn: 300,
+  lowSpawn: 100,
   ghost: 900,
   hold: 500,
 }
@@ -102,7 +102,7 @@ export default function ShopPanel({
 
         <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <p style={{ margin: 0, fontSize: '0.8rem', color: '#999' }}>Earn 1 coin per line you clear. Spend them here.</p>
-          <ShopItem title="Quick Spawn" description="New pieces appear 2 rows lower instead of above the board - react faster." price={UPGRADE_PRICES.lowSpawn} owned={upgrades.lowSpawn} disabled={coins < UPGRADE_PRICES.lowSpawn} busy={busyKey === 'lowSpawn'} onBuy={() => onBuyUpgrade('lowSpawn')} />
+          <ShopItem title="Quick Spawn" description="Start at level 2 with pieces appearing 2 rows lower. The increased difficulty earns a 1.1x final score multiplier." price={UPGRADE_PRICES.lowSpawn} owned={upgrades.lowSpawn} disabled={coins < UPGRADE_PRICES.lowSpawn} busy={busyKey === 'lowSpawn'} onBuy={() => onBuyUpgrade('lowSpawn')} />
           <ShopItem title={`Tempo Control ${upgrades.speedLevel > 0 ? `(Lv. ${upgrades.speedLevel})` : ''}`} description="Softens how fast drop speed ramps up at high levels - stack it for higher scores in the late game." price={speedMaxed ? null : speedPrice} owned={false} maxed={speedMaxed} disabled={speedMaxed || coins < speedPrice} busy={busyKey === 'speed'} onBuy={() => onBuyUpgrade('speed')} buyLabel={upgrades.speedLevel > 0 ? 'Upgrade again' : 'Buy'} />
           <ShopItem title="Hologram Piece" description="Shows a translucent outline of where your piece will land if hard-dropped." price={UPGRADE_PRICES.ghost} owned={upgrades.ghost} disabled={coins < UPGRADE_PRICES.ghost} busy={busyKey === 'ghost'} onBuy={() => onBuyUpgrade('ghost')} />
           <ShopItem title="Hold Piece" description={'Store the active piece and swap it back in later. Press "/" to hold/swap.'} price={UPGRADE_PRICES.hold} owned={upgrades.hold} disabled={coins < UPGRADE_PRICES.hold} busy={busyKey === 'hold'} onBuy={() => onBuyUpgrade('hold')} />
