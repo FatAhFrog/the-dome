@@ -14,6 +14,8 @@ export default function ProfilePage() {
   const [username, setUsername] = useState('')
   const [newsCategory, setNewsCategory] = useState('general')
   const [newsEnabled, setNewsEnabled] = useState(true)
+  const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
+  const [tetrisCrownColor, setTetrisCrownColor] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [pushStatus, setPushStatus] = useState('default')
@@ -30,7 +32,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, news_category, news_enabled, avatar_url')
+        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_color')
         .eq('id', user.id)
         .single()
 
@@ -38,6 +40,8 @@ export default function ProfilePage() {
       setNewsCategory(profile?.news_category || 'general')
       setNewsEnabled(profile?.news_enabled ?? true)
       setAvatarUrl(profile?.avatar_url || null)
+      setTetrisCrownEnabled(profile?.tetris_crown_enabled ?? true)
+      setTetrisCrownColor(profile?.tetris_crown_color || '')
       setLoading(false)
     }
 
@@ -58,7 +62,14 @@ export default function ProfilePage() {
 
     const { error } = await supabase
       .from('profiles')
-      .upsert({ id: user.id, username: username.trim(), news_category: newsCategory, news_enabled: newsEnabled })
+      .upsert({
+        id: user.id,
+        username: username.trim(),
+        news_category: newsCategory,
+        news_enabled: newsEnabled,
+        tetris_crown_enabled: tetrisCrownEnabled,
+        tetris_crown_color: tetrisCrownColor.trim() || null,
+      })
 
     setSaving(false)
     setMessage(error ? `Error: ${error.message}` : 'Saved!')
@@ -204,6 +215,42 @@ export default function ProfilePage() {
             >
               {pushLoading ? 'Enabling...' : 'Enable / Refresh notifications'}
             </button>
+          )}
+        </div>
+
+        <div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
+            Tetris champion styling
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={tetrisCrownEnabled}
+              onChange={(e) => setTetrisCrownEnabled(e.target.checked)}
+            />
+            <span>Show special styling if I&apos;m #1 on the Tetris leaderboard</span>
+          </div>
+          {tetrisCrownEnabled && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <input
+                type="color"
+                value={tetrisCrownColor || '#EB4600'}
+                onChange={(e) => setTetrisCrownColor(e.target.value)}
+                style={{ width: 40, height: 32, padding: 0, border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+              <span style={{ fontSize: '0.85rem', color: '#666' }}>
+                Custom color {tetrisCrownColor && '(overrides the default rainbow)'}
+              </span>
+              {tetrisCrownColor && (
+                <button
+                  type="button"
+                  onClick={() => setTetrisCrownColor('')}
+                  style={{ fontSize: '0.8rem', color: '#EB4600', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Reset to default
+                </button>
+              )}
+            </div>
           )}
         </div>
 

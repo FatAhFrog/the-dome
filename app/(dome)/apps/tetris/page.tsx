@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 const COLS = 10
 const ROWS = 20
 const CELL = 24
+const NEXT_CELL = 22
 
 type Cell = string | null
 type Board = Cell[][]
@@ -80,6 +81,7 @@ type ActivePiece = {
 
 export default function TetrisPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const nextCanvasRef = useRef<HTMLCanvasElement>(null)
   const [board, setBoard] = useState<Board>(emptyBoard())
   const [active, setActive] = useState<ActivePiece | null>(null)
   const [nextType, setNextType] = useState<string>('I')
@@ -307,9 +309,36 @@ export default function TetrisPage() {
     }
   }, [board, active])
 
+  const drawNext = useCallback(() => {
+    const canvas = nextCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.fillStyle = '#fafafa'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    const cells = SHAPES[nextType][0]
+    const xs = cells.map(([x]) => x)
+    const ys = cells.map(([, y]) => y)
+    const pieceWidth = Math.max(...xs) - Math.min(...xs) + 1
+    const pieceHeight = Math.max(...ys) - Math.min(...ys) + 1
+    const offsetX = (4 - pieceWidth) / 2 - Math.min(...xs)
+    const offsetY = (4 - pieceHeight) / 2 - Math.min(...ys)
+
+    ctx.fillStyle = COLORS[nextType]
+    cells.forEach(([x, y]) => {
+      ctx.fillRect((x + offsetX) * NEXT_CELL, (y + offsetY) * NEXT_CELL, NEXT_CELL - 1, NEXT_CELL - 1)
+    })
+  }, [nextType])
+
   useEffect(() => {
     draw()
   }, [draw])
+
+  useEffect(() => {
+    drawNext()
+  }, [drawNext])
 
   return (
     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -319,65 +348,83 @@ export default function TetrisPage() {
         <p>Score: {score}</p>
         <p>Lines: {lines}</p>
         <p>Level: {level}</p>
-        <p>Next: {nextType}</p>
       </div>
 
-      <div style={{ position: 'relative' }}>
-        <canvas
-          ref={canvasRef}
-          width={COLS * CELL}
-          height={ROWS * CELL}
-          style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
-        />
-        {started && !gameOver && !paused && (
-          <button
-            onClick={() => setPaused(true)}
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              padding: '0.25rem 0.75rem',
-              background: '#1A1A1A',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-            }}
-          >
-            Pause
-          </button>
-        )}
-        {(!started || gameOver || paused) && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(255,255,255,0.92)',
-              borderRadius: '8px',
-            }}
-          >
-            {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
-            {gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Game Over! Score: {score}</p>}
+      <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+        <div style={{ position: 'relative' }}>
+          <canvas
+            ref={canvasRef}
+            width={COLS * CELL}
+            height={ROWS * CELL}
+            style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
+          />
+          {started && !gameOver && !paused && (
             <button
-              onClick={paused ? () => setPaused(false) : resetGame}
+              onClick={() => setPaused(true)}
               style={{
-                padding: '0.5rem 1.5rem',
-                background: '#EB4600',
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                padding: '0.25rem 0.75rem',
+                background: '#1A1A1A',
                 color: 'white',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '4px',
                 cursor: 'pointer',
+                fontSize: '0.8rem',
               }}
             >
-              {paused ? 'Resume' : gameOver ? 'Play Again' : 'Start Game'}
+              Pause
             </button>
-          </div>
-        )}
+          )}
+          {(!started || gameOver || paused) && (
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(255,255,255,0.92)',
+                borderRadius: '8px',
+              }}
+            >
+              {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
+              {gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Game Over! Score: {score}</p>}
+              <button
+                onClick={paused ? () => setPaused(false) : resetGame}
+                style={{
+                  padding: '0.5rem 1.5rem',
+                  background: '#EB4600',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                {paused ? 'Resume' : gameOver ? 'Play Again' : 'Start Game'}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            border: '2px solid #1A1A1A',
+            borderRadius: '8px',
+            padding: '15px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.5rem',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em' }}>
+            NEXT
+          </p>
+          <canvas ref={nextCanvasRef} width={4 * NEXT_CELL} height={4 * NEXT_CELL} />
+        </div>
       </div>
 
       <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>
