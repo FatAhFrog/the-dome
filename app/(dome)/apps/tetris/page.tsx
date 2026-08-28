@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
 import { ThemeKey, THEME_PRICE, THEME_CHANGE_EVENT, DEFAULT_PIECE_COLORS, getPieceColorsFromDOM, readCssVar } from '@/lib/themes'
+import TetrisMetricsPanel, { TetrisMetricSample } from '@/components/TetrisMetricsPanel'
 
 const COLS = 10
 const ROWS = 20
@@ -109,6 +110,15 @@ export default function TetrisPage() {
   const gridLineRef = useRef<string>('#eeeeee')
   const [themeTick, setThemeTick] = useState(0)
 
+  // Per-second dev metrics (Profile → METRICS_MODE_TETRIS).
+  const [metricsMode, setMetricsMode] = useState(false)
+  const [metricsSamples, setMetricsSamples] = useState<TetrisMetricSample[]>([])
+  const moveCountRef = useRef(0)
+  const speedMsRef = useRef(0)
+  const gameStartRef = useRef(0)
+  const prevSnapshotRef = useRef({ score: 0, lines: 0, moves: 0 })
+  const linesRef = useRef(lines)
+
   useEffect(() => {
     const readTheme = () => {
       pieceColorsRef.current = getPieceColorsFromDOM()
@@ -160,7 +170,8 @@ export default function TetrisPage() {
     activeRef.current = active
     upgradesRef.current = upgrades
     holdTypeRef.current = holdType
-  }, [board, active, upgrades, holdType])
+    linesRef.current = lines
+  }, [board, active, upgrades, holdType, lines])
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -169,12 +180,13 @@ export default function TetrisPage() {
       userIdRef.current = user.id
       const { data: profile } = await supabase
         .from('profiles')
-        .select('tetris_next_preview_size, coins, tetris_upgrade_low_spawn, tetris_upgrade_speed_level, tetris_upgrade_ghost, tetris_upgrade_hold')
+        .select('tetris_next_preview_size, coins, tetris_upgrade_low_spawn, tetris_upgrade_speed_level, tetris_upgrade_ghost, tetris_upgrade_hold, metrics_mode_tetris')
         .eq('id', user.id)
         .single()
       if (profile?.tetris_next_preview_size) setNextCellSize(profile.tetris_next_preview_size)
       setCoins(profile?.coins ?? 0)
       setUpgrades({ lowSpawn: profile?.tetris_upgrade_low_spawn ?? false, speedLevel: profile?.tetris_upgrade_speed_level ?? 0, ghost: profile?.tetris_upgrade_ghost ?? false, hold: profile?.tetris_upgrade_hold ?? false })
+      setMetricsMode(profile?.metrics_mode_tetris ?? false)
       const { data: purchases } = await supabase.from('theme_purchases').select('theme_key').eq('user_id', user.id)
       setOwnedThemeKeys((purchases || []).map((p) => p.theme_key))
     }
@@ -305,6 +317,10 @@ export default function TetrisPage() {
     setNextType(secondType)
     setActive(spawnPiece(firstType))
     setStarted(true)
+    moveCountRef.current = 0
+    gameStartRef.current = Date.now()
+    prevSnapshotRef.current = { score: 0, lines: 0, moves: 0 }
+    setMetricsSamples([])
   }
 
   const submitScore = useCallback(async (finalScore: number) => {
@@ -408,12 +424,12 @@ export default function TetrisPage() {
       if (!started || gameOver) return
       if (e.key === 'p' || e.key === 'P') { setPaused((p) => !p); return }
       if (paused) return
-      if (e.key === 'ArrowLeft') tryMove(-1, 0)
-      else if (e.key === 'ArrowRight') tryMove(1, 0)
-      else if (e.key === 'ArrowDown') tryMove(0, 1)
-      else if (e.key === 'ArrowUp') tryRotate()
-      else if (e.key === ' ') hardDrop()
-      else if (e.key === '/') handleHold()
+      if (e.key === 'ArrowLeft') { moveCountRef.current += 1; tryMove(-1, 0) }
+      else if (e.key === 'ArrowRight') { moveCountRef.current += 1; tryMove(1, 0) }
+      else if (e.key === 'ArrowDown') { moveCountRef.current += 1; tryMove(0, 1) }
+      else if (e.key === 'ArrowUp') { moveCountRef.current += 1; tryRotate() }
+      else if (e.key === ' ') { moveCountRef.current += 1; hardDrop() }
+      else if (e.key === '/') { moveCountRef.current += 1; handleHold() }
     }
     window.addEventListener('keydown', handleKeyDown, { passive: false })
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -423,6 +439,7 @@ export default function TetrisPage() {
     if (!started || gameOver || paused) return
     const { speedLevel } = upgrades
     const speed = Math.max(150 + speedLevel * 15, 800 - (level - 1) * Math.max(20, 60 - speedLevel * 6))
+    speedMsRef.current = speed
     const interval = setInterval(() => {
       const piece = activeRef.current
       if (!piece) return
@@ -435,6 +452,34 @@ export default function TetrisPage() {
     }, speed)
     return () => clearInterval(interval)
   }, [started, gameOver, paused, level, lockPiece, upgrades])
+
+  // Per-second metrics sampling — only runs while METRICS_MODE_TETRIS is on
+  // and a game is in progress. Keeps recording through pause so the "since
+  // start" timeline reflects real elapsed time; score/lines/moves simply
+  // read 0 for any second spent paused.
+  useEffect(() => {
+    if (!metricsMode || !started || gameOver) return
+    const interval = setInterval(() => {
+      const t = (Date.now() - gameStartRef.current) / 1000
+      const curScore = scoreRef.current
+      const curLines = linesRef.current
+      const curMoves = moveCountRef.current
+      const prev = prevSnapshotRef.current
+      const sample: TetrisMetricSample = {
+        t,
+        score: curScore - prev.score,
+        lines: curLines - prev.lines,
+        moves: curMoves - prev.moves,
+        speed: speedMsRef.current > 0 ? 60000 / speedMsRef.current : 0,
+      }
+      prevSnapshotRef.current = { score: curScore, lines: curLines, moves: curMoves }
+      setMetricsSamples((arr) => {
+        const next = arr.length >= 7200 ? [...arr.slice(1), sample] : [...arr, sample]
+        return next
+      })
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [metricsMode, started, gameOver])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -640,6 +685,8 @@ export default function TetrisPage() {
           </div>}
           {started && !gameOver && <button onClick={() => setPaused((p) => !p)} style={{ padding: '0.5rem 0.75rem', background: 'var(--color-accent-secondary)', color: 'var(--color-on-accent, #fff)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{paused ? 'Resume' : 'Pause'}</button>}
         </div>
+
+        {metricsMode && <TetrisMetricsPanel samples={metricsSamples} />}
       </div>
 
       <p style={{ marginTop: '1rem', color: 'var(--color-text)', opacity: 0.6, fontSize: '0.9rem' }}>

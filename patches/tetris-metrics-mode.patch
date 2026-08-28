@@ -1,0 +1,350 @@
+diff --git a/app/(dome)/apps/tetris/page.tsx b/app/(dome)/apps/tetris/page.tsx
+index c1d6ba9..b43eb9c 100644
+--- a/app/(dome)/apps/tetris/page.tsx
++++ b/app/(dome)/apps/tetris/page.tsx
+@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+ import { createClient } from '@/lib/supabase/client'
+ import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
+ import { ThemeKey, THEME_PRICE, THEME_CHANGE_EVENT, DEFAULT_PIECE_COLORS, getPieceColorsFromDOM, readCssVar } from '@/lib/themes'
++import TetrisMetricsPanel, { TetrisMetricSample } from '@/components/TetrisMetricsPanel'
+ 
+ const COLS = 10
+ const ROWS = 20
+@@ -109,6 +110,15 @@ export default function TetrisPage() {
+   const gridLineRef = useRef<string>('#eeeeee')
+   const [themeTick, setThemeTick] = useState(0)
+ 
++  // Per-second dev metrics (Profile → METRICS_MODE_TETRIS).
++  const [metricsMode, setMetricsMode] = useState(false)
++  const [metricsSamples, setMetricsSamples] = useState<TetrisMetricSample[]>([])
++  const moveCountRef = useRef(0)
++  const speedMsRef = useRef(0)
++  const gameStartRef = useRef(0)
++  const prevSnapshotRef = useRef({ score: 0, lines: 0, moves: 0 })
++  const linesRef = useRef(lines)
++
+   useEffect(() => {
+     const readTheme = () => {
+       pieceColorsRef.current = getPieceColorsFromDOM()
+@@ -160,7 +170,8 @@ export default function TetrisPage() {
+     activeRef.current = active
+     upgradesRef.current = upgrades
+     holdTypeRef.current = holdType
+-  }, [board, active, upgrades, holdType])
++    linesRef.current = lines
++  }, [board, active, upgrades, holdType, lines])
+ 
+   useEffect(() => {
+     const loadProfile = async () => {
+@@ -169,12 +180,13 @@ export default function TetrisPage() {
+       userIdRef.current = user.id
+       const { data: profile } = await supabase
+         .from('profiles')
+-        .select('tetris_next_preview_size, coins, tetris_upgrade_low_spawn, tetris_upgrade_speed_level, tetris_upgrade_ghost, tetris_upgrade_hold')
++        .select('tetris_next_preview_size, coins, tetris_upgrade_low_spawn, tetris_upgrade_speed_level, tetris_upgrade_ghost, tetris_upgrade_hold, metrics_mode_tetris')
+         .eq('id', user.id)
+         .single()
+       if (profile?.tetris_next_preview_size) setNextCellSize(profile.tetris_next_preview_size)
+       setCoins(profile?.coins ?? 0)
+       setUpgrades({ lowSpawn: profile?.tetris_upgrade_low_spawn ?? false, speedLevel: profile?.tetris_upgrade_speed_level ?? 0, ghost: profile?.tetris_upgrade_ghost ?? false, hold: profile?.tetris_upgrade_hold ?? false })
++      setMetricsMode(profile?.metrics_mode_tetris ?? false)
+       const { data: purchases } = await supabase.from('theme_purchases').select('theme_key').eq('user_id', user.id)
+       setOwnedThemeKeys((purchases || []).map((p) => p.theme_key))
+     }
+@@ -305,6 +317,10 @@ export default function TetrisPage() {
+     setNextType(secondType)
+     setActive(spawnPiece(firstType))
+     setStarted(true)
++    moveCountRef.current = 0
++    gameStartRef.current = Date.now()
++    prevSnapshotRef.current = { score: 0, lines: 0, moves: 0 }
++    setMetricsSamples([])
+   }
+ 
+   const submitScore = useCallback(async (finalScore: number) => {
+@@ -408,12 +424,12 @@ export default function TetrisPage() {
+       if (!started || gameOver) return
+       if (e.key === 'p' || e.key === 'P') { setPaused((p) => !p); return }
+       if (paused) return
+-      if (e.key === 'ArrowLeft') tryMove(-1, 0)
+-      else if (e.key === 'ArrowRight') tryMove(1, 0)
+-      else if (e.key === 'ArrowDown') tryMove(0, 1)
+-      else if (e.key === 'ArrowUp') tryRotate()
+-      else if (e.key === ' ') hardDrop()
+-      else if (e.key === '/') handleHold()
++      if (e.key === 'ArrowLeft') { moveCountRef.current += 1; tryMove(-1, 0) }
++      else if (e.key === 'ArrowRight') { moveCountRef.current += 1; tryMove(1, 0) }
++      else if (e.key === 'ArrowDown') { moveCountRef.current += 1; tryMove(0, 1) }
++      else if (e.key === 'ArrowUp') { moveCountRef.current += 1; tryRotate() }
++      else if (e.key === ' ') { moveCountRef.current += 1; hardDrop() }
++      else if (e.key === '/') { moveCountRef.current += 1; handleHold() }
+     }
+     window.addEventListener('keydown', handleKeyDown, { passive: false })
+     return () => window.removeEventListener('keydown', handleKeyDown)
+@@ -423,6 +439,7 @@ export default function TetrisPage() {
+     if (!started || gameOver || paused) return
+     const { speedLevel } = upgrades
+     const speed = Math.max(150 + speedLevel * 15, 800 - (level - 1) * Math.max(20, 60 - speedLevel * 6))
++    speedMsRef.current = speed
+     const interval = setInterval(() => {
+       const piece = activeRef.current
+       if (!piece) return
+@@ -436,6 +453,34 @@ export default function TetrisPage() {
+     return () => clearInterval(interval)
+   }, [started, gameOver, paused, level, lockPiece, upgrades])
+ 
++  // Per-second metrics sampling — only runs while METRICS_MODE_TETRIS is on
++  // and a game is in progress. Keeps recording through pause so the "since
++  // start" timeline reflects real elapsed time; score/lines/moves simply
++  // read 0 for any second spent paused.
++  useEffect(() => {
++    if (!metricsMode || !started || gameOver) return
++    const interval = setInterval(() => {
++      const t = (Date.now() - gameStartRef.current) / 1000
++      const curScore = scoreRef.current
++      const curLines = linesRef.current
++      const curMoves = moveCountRef.current
++      const prev = prevSnapshotRef.current
++      const sample: TetrisMetricSample = {
++        t,
++        score: curScore - prev.score,
++        lines: curLines - prev.lines,
++        moves: curMoves - prev.moves,
++        speed: speedMsRef.current > 0 ? 60000 / speedMsRef.current : 0,
++      }
++      prevSnapshotRef.current = { score: curScore, lines: curLines, moves: curMoves }
++      setMetricsSamples((arr) => {
++        const next = arr.length >= 7200 ? [...arr.slice(1), sample] : [...arr, sample]
++        return next
++      })
++    }, 1000)
++    return () => clearInterval(interval)
++  }, [metricsMode, started, gameOver])
++
+   const draw = useCallback(() => {
+     const canvas = canvasRef.current
+     if (!canvas) return
+@@ -640,6 +685,8 @@ export default function TetrisPage() {
+           </div>}
+           {started && !gameOver && <button onClick={() => setPaused((p) => !p)} style={{ padding: '0.5rem 0.75rem', background: 'var(--color-accent-secondary)', color: 'var(--color-on-accent, #fff)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{paused ? 'Resume' : 'Pause'}</button>}
+         </div>
++
++        {metricsMode && <TetrisMetricsPanel samples={metricsSamples} />}
+       </div>
+ 
+       <p style={{ marginTop: '1rem', color: 'var(--color-text)', opacity: 0.6, fontSize: '0.9rem' }}>
+diff --git a/app/(dome)/profile/page.tsx b/app/(dome)/profile/page.tsx
+index 6ff5f30..baae1f1 100644
+--- a/app/(dome)/profile/page.tsx
++++ b/app/(dome)/profile/page.tsx
+@@ -17,6 +17,7 @@ export default function ProfilePage() {
+   const [newsEnabled, setNewsEnabled] = useState(true)
+   const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
+   const [tetrisCrownPiece, setTetrisCrownPiece] = useState('')
++  const [metricsModeTetris, setMetricsModeTetris] = useState(false)
+   const [nextPreviewSize, setNextPreviewSize] = useState(22)
+   const [activeTheme, setActiveTheme] = useState<ThemeKey>('dome')
+   const [ownedThemes, setOwnedThemes] = useState<{ key: ThemeKey; name: string }[]>([])
+@@ -37,7 +38,7 @@ export default function ProfilePage() {
+ 
+       const { data: profile } = await supabase
+         .from('profiles')
+-        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme')
++        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme, metrics_mode_tetris')
+         .eq('id', user.id)
+         .single()
+ 
+@@ -49,6 +50,7 @@ export default function ProfilePage() {
+       setTetrisCrownPiece(profile?.tetris_crown_piece || '')
+       setNextPreviewSize(profile?.tetris_next_preview_size || 22)
+       setActiveTheme(isThemeKey(profile?.active_theme) ? profile.active_theme : 'dome')
++      setMetricsModeTetris(profile?.metrics_mode_tetris ?? false)
+ 
+       const { data: purchases } = await supabase.from('theme_purchases').select('theme_key, custom_name').eq('user_id', user.id)
+       setOwnedThemes((purchases || []).filter((p) => isThemeKey(p.theme_key)).map((p) => ({ key: p.theme_key as ThemeKey, name: p.custom_name })))
+@@ -89,6 +91,7 @@ export default function ProfilePage() {
+         tetris_crown_enabled: tetrisCrownEnabled,
+         tetris_crown_piece: tetrisCrownPiece || null,
+         tetris_next_preview_size: nextPreviewSize,
++        metrics_mode_tetris: metricsModeTetris,
+       })
+ 
+     setSaving(false)
+@@ -284,6 +287,18 @@ export default function ProfilePage() {
+           </select>
+         </label>
+ 
++        <div>
++          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Developer tools</div>
++          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
++            <input
++              type="checkbox"
++              checked={metricsModeTetris}
++              onChange={(e) => setMetricsModeTetris(e.target.checked)}
++            />
++            <span>METRICS_MODE_TETRIS — show a live score/lines/moves/speed panel next to the Tetris board</span>
++          </div>
++        </div>
++
+         <div>
+           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Dome theme</div>
+           <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#999' }}>Buy palettes in the Tetris shop, then pick your favorite here - it re-skins the whole Dome.</p>
+diff --git a/components/TetrisMetricsPanel.tsx b/components/TetrisMetricsPanel.tsx
+new file mode 100644
+index 0000000..57a8270
+--- /dev/null
++++ b/components/TetrisMetricsPanel.tsx
+@@ -0,0 +1,144 @@
++'use client'
++
++import { useMemo, useState } from 'react'
++
++// One sample per second while a game is running. score/lines/moves are
++// PER-SECOND deltas (not running totals) — how much each changed since the
++// previous sample. speed is the current gravity rate in drops/minute
++// (60000 / dropIntervalMs), so it reads as "higher = faster" like the other
++// three instead of an inverted millisecond countdown.
++export type TetrisMetricSample = {
++  t: number
++  score: number
++  lines: number
++  moves: number
++  speed: number
++}
++
++const WINDOWS: { key: string; label: string; seconds: number }[] = [
++  { key: '1m', label: '1 min', seconds: 60 },
++  { key: '10m', label: '10 min', seconds: 600 },
++  { key: '1h', label: '1 hr', seconds: 3600 },
++  { key: '2h', label: '2 hr', seconds: 7200 },
++]
++
++const CHART_W = 420
++const CHART_H = 84
++const PAD_L = 34
++const PAD_B = 16
++
++function MetricChart({
++  title,
++  unit,
++  data,
++  accessor,
++  color,
++}: {
++  title: string
++  unit: string
++  data: TetrisMetricSample[]
++  accessor: (s: TetrisMetricSample) => number
++  color: string
++}) {
++  const points = data.map((s) => ({ t: s.t, v: accessor(s) }))
++  const maxV = Math.max(1, ...points.map((p) => p.v))
++  const minT = points.length ? points[0].t : 0
++  const maxT = points.length ? points[points.length - 1].t : 1
++  const spanT = Math.max(1, maxT - minT)
++
++  const plotW = CHART_W - PAD_L - 8
++  const plotH = CHART_H - PAD_B - 8
++
++  const path = points
++    .map((p, i) => {
++      const x = PAD_L + ((p.t - minT) / spanT) * plotW
++      const y = 8 + plotH - (p.v / maxV) * plotH
++      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
++    })
++    .join(' ')
++
++  const latest = points.length ? points[points.length - 1].v : 0
++
++  return (
++    <div style={{ marginBottom: '0.75rem' }}>
++      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.15rem' }}>
++        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--color-panel-text)', opacity: 0.75 }}>{title}</span>
++        <span style={{ fontSize: '0.75rem', color: 'var(--color-panel-text)', opacity: 0.6 }}>
++          {latest.toFixed(unit === 'drops/min' ? 0 : 1)} {unit}
++        </span>
++      </div>
++      <svg width={CHART_W} height={CHART_H} style={{ display: 'block', overflow: 'visible' }}>
++        {/* baseline + max gridline */}
++        <line x1={PAD_L} y1={8 + plotH} x2={CHART_W - 4} y2={8 + plotH} stroke="var(--color-border)" strokeWidth={1} />
++        <line x1={PAD_L} y1={8} x2={CHART_W - 4} y2={8} stroke="var(--color-border)" strokeWidth={1} strokeDasharray="2,3" />
++        <text x={0} y={12} fontSize={9} fill="var(--color-panel-text)" opacity={0.5}>{maxV.toFixed(0)}</text>
++        <text x={0} y={8 + plotH + 3} fontSize={9} fill="var(--color-panel-text)" opacity={0.5}>0</text>
++        {points.length > 1 ? (
++          <path d={path} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
++        ) : (
++          <text x={PAD_L + 6} y={CHART_H / 2} fontSize={10} fill="var(--color-panel-text)" opacity={0.45}>
++            Collecting data…
++          </text>
++        )}
++      </svg>
++    </div>
++  )
++}
++
++export default function TetrisMetricsPanel({ samples }: { samples: TetrisMetricSample[] }) {
++  const [windowKey, setWindowKey] = useState('1m')
++
++  const windowed = useMemo(() => {
++    if (samples.length === 0) return []
++    const seconds = WINDOWS.find((w) => w.key === windowKey)?.seconds ?? 60
++    const latestT = samples[samples.length - 1].t
++    return samples.filter((s) => s.t >= latestT - seconds)
++  }, [samples, windowKey])
++
++  return (
++    <div
++      style={{
++        width: CHART_W + 24,
++        border: `2px solid var(--color-panel-text)`,
++        borderRadius: '8px',
++        padding: '14px',
++        background: 'var(--color-panel-background)',
++        color: 'var(--color-panel-text)',
++      }}
++    >
++      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
++        <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 600, opacity: 0.75 }}>METRICS</p>
++        <div style={{ display: 'flex', gap: '0.25rem' }}>
++          {WINDOWS.map((w) => (
++            <button
++              key={w.key}
++              onClick={() => setWindowKey(w.key)}
++              style={{
++                fontSize: '0.7rem',
++                padding: '0.15rem 0.45rem',
++                borderRadius: '4px',
++                border: '1px solid var(--color-border)',
++                cursor: 'pointer',
++                background: windowKey === w.key ? 'var(--color-accent)' : 'transparent',
++                color: windowKey === w.key ? 'var(--color-on-accent, #fff)' : 'var(--color-panel-text)',
++              }}
++            >
++              {w.label}
++            </button>
++          ))}
++        </div>
++      </div>
++
++      <MetricChart title="Score / sec" unit="pts/s" data={windowed} accessor={(s) => s.score} color="var(--color-accent)" />
++      <MetricChart title="Lines / sec" unit="/s" data={windowed} accessor={(s) => s.lines} color="var(--color-accent-secondary)" />
++      <MetricChart title="Moves / sec" unit="/s" data={windowed} accessor={(s) => s.moves} color="var(--piece-t)" />
++      <MetricChart title="Game speed since start" unit="drops/min" data={windowed} accessor={(s) => s.speed} color="var(--piece-z)" />
++
++      {samples.length === 0 && (
++        <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.25rem', marginBottom: 0 }}>
++          Starts recording once a game begins.
++        </p>
++      )}
++    </div>
++  )
++}
+diff --git a/supabase/migrations/006_tetris_metrics_mode.sql b/supabase/migrations/006_tetris_metrics_mode.sql
+new file mode 100644
+index 0000000..c941c34
+--- /dev/null
++++ b/supabase/migrations/006_tetris_metrics_mode.sql
+@@ -0,0 +1,3 @@
++-- Dev-facing per-second Tetris metrics, toggled from Profile.
++alter table public.profiles
++  add column if not exists metrics_mode_tetris boolean not null default false;

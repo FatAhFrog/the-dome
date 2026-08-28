@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [newsEnabled, setNewsEnabled] = useState(true)
   const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
   const [tetrisCrownPiece, setTetrisCrownPiece] = useState('')
+  const [metricsModeTetris, setMetricsModeTetris] = useState(false)
   const [nextPreviewSize, setNextPreviewSize] = useState(22)
   const [activeTheme, setActiveTheme] = useState<ThemeKey>('dome')
   const [ownedThemes, setOwnedThemes] = useState<{ key: ThemeKey; name: string }[]>([])
@@ -37,7 +38,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme')
+        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme, metrics_mode_tetris')
         .eq('id', user.id)
         .single()
 
@@ -49,6 +50,7 @@ export default function ProfilePage() {
       setTetrisCrownPiece(profile?.tetris_crown_piece || '')
       setNextPreviewSize(profile?.tetris_next_preview_size || 22)
       setActiveTheme(isThemeKey(profile?.active_theme) ? profile.active_theme : 'dome')
+      setMetricsModeTetris(profile?.metrics_mode_tetris ?? false)
 
       const { data: purchases } = await supabase.from('theme_purchases').select('theme_key, custom_name').eq('user_id', user.id)
       setOwnedThemes((purchases || []).filter((p) => isThemeKey(p.theme_key)).map((p) => ({ key: p.theme_key as ThemeKey, name: p.custom_name })))
@@ -89,6 +91,7 @@ export default function ProfilePage() {
         tetris_crown_enabled: tetrisCrownEnabled,
         tetris_crown_piece: tetrisCrownPiece || null,
         tetris_next_preview_size: nextPreviewSize,
+        metrics_mode_tetris: metricsModeTetris,
       })
 
     setSaving(false)
@@ -283,6 +286,18 @@ export default function ProfilePage() {
             <option value={34}>Extra Large</option>
           </select>
         </label>
+
+        <div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Developer tools</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={metricsModeTetris}
+              onChange={(e) => setMetricsModeTetris(e.target.checked)}
+            />
+            <span>METRICS_MODE_TETRIS — show a live score/lines/moves/speed panel next to the Tetris board</span>
+          </div>
+        </div>
 
         <div>
           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Dome theme</div>
