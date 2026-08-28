@@ -1,0 +1,1322 @@
+diff --git a/app/(dome)/apps/tetris/page.tsx b/app/(dome)/apps/tetris/page.tsx
+index 6abc965..13efaf7 100644
+--- a/app/(dome)/apps/tetris/page.tsx
++++ b/app/(dome)/apps/tetris/page.tsx
+@@ -2,6 +2,8 @@
+ 
+ import { useEffect, useRef, useState, useCallback } from 'react'
+ import { createClient } from '@/lib/supabase/client'
++import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
++import { ThemeKey, THEME_PRICE } from '@/lib/themes'
+ 
+ const COLS = 10
+ const ROWS = 20
+@@ -76,12 +78,24 @@ type ActivePiece = {
+   y: number
+ }
+ 
++const DEFAULT_UPGRADES: TetrisUpgrades = {
++  lowSpawn: false,
++  speedLevel: 0,
++  ghost: false,
++  hold: false,
++}
++
++// Keys that would otherwise scroll/search the page while playing.
++const GUARD_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', '/'])
++
+ export default function TetrisPage() {
+   const canvasRef = useRef<HTMLCanvasElement>(null)
+   const nextCanvasRef = useRef<HTMLCanvasElement>(null)
++  const holdCanvasRef = useRef<HTMLCanvasElement>(null)
+   const [board, setBoard] = useState<Board>(emptyBoard())
+   const [active, setActive] = useState<ActivePiece | null>(null)
+   const [nextType, setNextType] = useState<string>('I')
++  const [holdType, setHoldType] = useState<string | null>(null)
+   const [score, setScore] = useState(0)
+   const [lines, setLines] = useState(0)
+   const [level, setLevel] = useState(1)
+@@ -89,10 +103,21 @@ export default function TetrisPage() {
+   const [started, setStarted] = useState(false)
+   const [paused, setPaused] = useState(false)
+   const [nextCellSize, setNextCellSize] = useState(22)
++
++  // Shop / economy state
++  const [coins, setCoins] = useState(0)
++  const [upgrades, setUpgrades] = useState<TetrisUpgrades>(DEFAULT_UPGRADES)
++  const [ownedThemeKeys, setOwnedThemeKeys] = useState<string[]>([])
++  const [shopOpen, setShopOpen] = useState(false)
++  const [busyKey, setBusyKey] = useState<string | null>(null)
++
+   const supabase = createClient()
+   const submittedRef = useRef(false)
+   const streakTypeRef = useRef<string | null>(null)
+   const streakCountRef = useRef(0)
++  const userIdRef = useRef<string | null>(null)
++  const canHoldRef = useRef(true)
++  const holdTypeRef = useRef<string | null>(null)
+ 
+   // Higher DECAY makes repeated pieces rarer faster.
+   const DECAY = 12
+@@ -125,25 +150,47 @@ export default function TetrisPage() {
+ 
+   const boardRef = useRef(board)
+   const activeRef = useRef(active)
++  const upgradesRef = useRef(upgrades)
+   boardRef.current = board
+   activeRef.current = active
++  upgradesRef.current = upgrades
++  holdTypeRef.current = holdType
+ 
+   useEffect(() => {
+     setNextType(drawPiece())
+   }, [drawPiece])
+ 
++  // Load profile settings: preview size, coins, upgrades, active theme.
+   useEffect(() => {
+-    const loadPreviewSize = async () => {
++    const loadProfile = async () => {
+       const { data: { user } } = await supabase.auth.getUser()
+       if (!user) return
++      userIdRef.current = user.id
++
+       const { data: profile } = await supabase
+         .from('profiles')
+-        .select('tetris_next_preview_size')
++        .select(
++          'tetris_next_preview_size, coins, tetris_upgrade_low_spawn, tetris_upgrade_speed_level, tetris_upgrade_ghost, tetris_upgrade_hold'
++        )
+         .eq('id', user.id)
+         .single()
++
+       if (profile?.tetris_next_preview_size) setNextCellSize(profile.tetris_next_preview_size)
++      setCoins(profile?.coins ?? 0)
++      setUpgrades({
++        lowSpawn: profile?.tetris_upgrade_low_spawn ?? false,
++        speedLevel: profile?.tetris_upgrade_speed_level ?? 0,
++        ghost: profile?.tetris_upgrade_ghost ?? false,
++        hold: profile?.tetris_upgrade_hold ?? false,
++      })
++
++      const { data: purchases } = await supabase
++        .from('theme_purchases')
++        .select('theme_key')
++        .eq('user_id', user.id)
++      setOwnedThemeKeys((purchases || []).map((p) => p.theme_key))
+     }
+-    loadPreviewSize()
++    loadProfile()
+   }, [supabase])
+ 
+   const getCells = (piece: ActivePiece) =>
+@@ -159,9 +206,18 @@ export default function TetrisPage() {
+   }
+ 
+   const spawnPiece = useCallback((type: string): ActivePiece => {
+-    return { type, rotation: 0, x: 3, y: -2 }
++    const offset = upgradesRef.current.lowSpawn ? 2 : 0
++    return { type, rotation: 0, x: 3, y: -2 + offset }
+   }, [])
+ 
++  const ghostPieceFor = (piece: ActivePiece, testBoard: Board): ActivePiece => {
++    let dropped = piece
++    while (isValidPosition({ ...dropped, y: dropped.y + 1 }, testBoard)) {
++      dropped = { ...dropped, y: dropped.y + 1 }
++    }
++    return dropped
++  }
++
+   const lockPiece = useCallback((piece: ActivePiece, currentBoard: Board) => {
+     const newBoard = currentBoard.map((row) => [...row])
+     getCells(piece).forEach(([x, y]) => {
+@@ -193,9 +249,12 @@ export default function TetrisPage() {
+         setLevel(1 + Math.floor(newLines / 10))
+         return newLines
+       })
++      // 1 coin per line cleared.
++      setCoins((c) => c + clearedLines)
+     }
+ 
+     setBoard(filteredBoard)
++    canHoldRef.current = true
+ 
+     const newType = nextType
+     const upcoming = drawPiece()
+@@ -219,6 +278,8 @@ export default function TetrisPage() {
+     setGameOver(false)
+     submittedRef.current = false
+     setPaused(false)
++    setHoldType(null)
++    canHoldRef.current = true
+     streakTypeRef.current = null
+     streakCountRef.current = 0
+     const firstType = drawPiece()
+@@ -241,6 +302,31 @@ export default function TetrisPage() {
+     }
+   }, [gameOver, score, submitScore])
+ 
++  // Persist coin balance whenever it changes (line clears, purchases).
++  const coinsLoadedRef = useRef(false)
++  const [syncError, setSyncError] = useState<string | null>(null)
++  useEffect(() => {
++    if (!coinsLoadedRef.current) {
++      // Skip the very first write, which just mirrors what we loaded.
++      coinsLoadedRef.current = true
++      return
++    }
++    const userId = userIdRef.current
++    if (!userId) return
++    supabase
++      .from('profiles')
++      .update({ coins })
++      .eq('id', userId)
++      .then(({ error }) => {
++        if (error) {
++          console.error('[tetris] failed to save coins:', error.message, error)
++          setSyncError(`Coins didn't save: ${error.message}`)
++        } else {
++          setSyncError(null)
++        }
++      })
++  }, [coins, supabase])
++
+   const tryMove = useCallback((dx: number, dy: number) => {
+     const piece = activeRef.current
+     if (!piece) return false
+@@ -273,16 +359,52 @@ export default function TetrisPage() {
+   const hardDrop = useCallback(() => {
+     const piece = activeRef.current
+     if (!piece) return
+-    let dropped = piece
+-    while (isValidPosition({ ...dropped, y: dropped.y + 1 }, boardRef.current)) {
+-      dropped = { ...dropped, y: dropped.y + 1 }
+-    }
++    const dropped = ghostPieceFor(piece, boardRef.current)
+     setActive(dropped)
+     lockPiece(dropped, boardRef.current)
+   }, [lockPiece])
+ 
++  const handleHold = useCallback(() => {
++    if (!upgradesRef.current.hold) return
++    if (!canHoldRef.current) return
++    const piece = activeRef.current
++    if (!piece) return
++
++    canHoldRef.current = false
++
++    if (holdTypeRef.current === null) {
++      holdTypeRef.current = piece.type
++      setHoldType(piece.type)
++      const newType = nextType
++      const upcoming = drawPiece()
++      setNextType(upcoming)
++      const spawned = spawnPiece(newType)
++      if (!isValidPosition(spawned, boardRef.current)) {
++        setGameOver(true)
++        setActive(null)
++      } else {
++        setActive(spawned)
++      }
++    } else {
++      const swapType = holdTypeRef.current
++      holdTypeRef.current = piece.type
++      setHoldType(piece.type)
++      const spawned = spawnPiece(swapType)
++      if (!isValidPosition(spawned, boardRef.current)) {
++        setGameOver(true)
++        setActive(null)
++      } else {
++        setActive(spawned)
++      }
++    }
++  }, [nextType, drawPiece, spawnPiece])
++
+   useEffect(() => {
+     const handleKeyDown = (e: KeyboardEvent) => {
++      // Stop arrows/space/slash from scrolling or triggering browser
++      // find-as-you-type while this page is open, win or lose.
++      if (GUARD_KEYS.has(e.key)) e.preventDefault()
++
+       if (!started || gameOver) return
+       if (e.key === 'p' || e.key === 'P') { setPaused((p) => !p); return }
+       if (paused) return
+@@ -290,15 +412,19 @@ export default function TetrisPage() {
+       else if (e.key === 'ArrowRight') tryMove(1, 0)
+       else if (e.key === 'ArrowDown') tryMove(0, 1)
+       else if (e.key === 'ArrowUp') tryRotate()
+-      else if (e.key === ' ') { e.preventDefault(); hardDrop() }
++      else if (e.key === ' ') hardDrop()
++      else if (e.key === '/') handleHold()
+     }
+-    window.addEventListener('keydown', handleKeyDown)
++    window.addEventListener('keydown', handleKeyDown, { passive: false })
+     return () => window.removeEventListener('keydown', handleKeyDown)
+-  }, [started, gameOver, paused, tryMove, tryRotate, hardDrop])
++  }, [started, gameOver, paused, tryMove, tryRotate, hardDrop, handleHold])
+ 
+   useEffect(() => {
+     if (!started || gameOver || paused) return
+-    const speed = Math.max(150, 800 - (level - 1) * 60)
++    const { speedLevel } = upgrades
++    const decrement = Math.max(20, 60 - speedLevel * 6)
++    const floor = Math.min(400, 150 + speedLevel * 15)
++    const speed = Math.max(floor, 800 - (level - 1) * decrement)
+     const interval = setInterval(() => {
+       const piece = activeRef.current
+       if (!piece) return
+@@ -310,7 +436,7 @@ export default function TetrisPage() {
+       }
+     }, speed)
+     return () => clearInterval(interval)
+-  }, [started, gameOver, paused, level, lockPiece])
++  }, [started, gameOver, paused, level, lockPiece, upgrades])
+ 
+   const draw = useCallback(() => {
+     const canvas = canvasRef.current
+@@ -330,6 +456,19 @@ export default function TetrisPage() {
+       })
+     })
+ 
++    if (active && upgrades.ghost) {
++      const ghost = ghostPieceFor(active, board)
++      if (ghost.y !== active.y) {
++        ctx.save()
++        ctx.globalAlpha = 0.25
++        ctx.fillStyle = COLORS[ghost.type]
++        getCells(ghost).forEach(([x, y]) => {
++          if (y >= 0) ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1)
++        })
++        ctx.restore()
++      }
++    }
++
+     if (active) {
+       ctx.fillStyle = COLORS[active.type]
+       getCells(active).forEach(([x, y]) => {
+@@ -352,18 +491,18 @@ export default function TetrisPage() {
+       ctx.lineTo(COLS * CELL, y * CELL)
+       ctx.stroke()
+     }
+-  }, [board, active])
++  }, [board, active, upgrades.ghost])
+ 
+-  const drawNext = useCallback(() => {
+-    const canvas = nextCanvasRef.current
++  const drawMiniPiece = (canvas: HTMLCanvasElement | null, type: string | null, size: number) => {
+     if (!canvas) return
+     const ctx = canvas.getContext('2d')
+     if (!ctx) return
+ 
+     ctx.fillStyle = '#fafafa'
+     ctx.fillRect(0, 0, canvas.width, canvas.height)
++    if (!type) return
+ 
+-    const cells = SHAPES[nextType][0]
++    const cells = SHAPES[type][0]
+     const xs = cells.map(([x]) => x)
+     const ys = cells.map(([, y]) => y)
+     const pieceWidth = Math.max(...xs) - Math.min(...xs) + 1
+@@ -371,23 +510,130 @@ export default function TetrisPage() {
+     const offsetX = (4 - pieceWidth) / 2 - Math.min(...xs)
+     const offsetY = (4 - pieceHeight) / 2 - Math.min(...ys)
+ 
+-    ctx.fillStyle = COLORS[nextType]
++    ctx.fillStyle = COLORS[type]
+     cells.forEach(([x, y]) => {
+-      ctx.fillRect((x + offsetX) * nextCellSize, (y + offsetY) * nextCellSize, nextCellSize - 1, nextCellSize - 1)
++      ctx.fillRect((x + offsetX) * size, (y + offsetY) * size, size - 1, size - 1)
+     })
+-  }, [nextType, nextCellSize])
++  }
+ 
+   useEffect(() => {
+     draw()
+   }, [draw])
+ 
+   useEffect(() => {
+-    drawNext()
+-  }, [drawNext])
++    drawMiniPiece(nextCanvasRef.current, nextType, nextCellSize)
++  }, [nextType, nextCellSize])
++
++  useEffect(() => {
++    drawMiniPiece(holdCanvasRef.current, holdType, nextCellSize)
++  }, [holdType, nextCellSize, upgrades.hold])
++
++  // --- Shop actions -------------------------------------------------
++
++  const buyUpgrade = async (key: 'lowSpawn' | 'speed' | 'ghost' | 'hold') => {
++    const userId = userIdRef.current
++    if (!userId || busyKey) return
++
++    let price: number
++    let column: string
++    let nextUpgrades: TetrisUpgrades
++
++    if (key === 'speed') {
++      if (upgrades.speedLevel >= MAX_SPEED_LEVEL) return
++      price = speedLevelPrice(upgrades.speedLevel)
++      column = 'tetris_upgrade_speed_level'
++      nextUpgrades = { ...upgrades, speedLevel: upgrades.speedLevel + 1 }
++    } else {
++      if (upgrades[key]) return
++      price = UPGRADE_PRICES[key]
++      column = key === 'lowSpawn' ? 'tetris_upgrade_low_spawn' : key === 'ghost' ? 'tetris_upgrade_ghost' : 'tetris_upgrade_hold'
++      nextUpgrades = { ...upgrades, [key]: true }
++    }
++
++    if (coins < price) return
++
++    setBusyKey(key)
++    const newCoins = coins - price
++    const updatePayload: Record<string, number | boolean> = { coins: newCoins }
++    updatePayload[column] = key === 'speed' ? nextUpgrades.speedLevel : true
++
++    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId)
++    if (!error) {
++      setCoins(newCoins)
++      setUpgrades(nextUpgrades)
++      setSyncError(null)
++    } else {
++      console.error('[tetris] failed to save upgrade purchase:', error.message, error)
++      setSyncError(`Purchase didn't save: ${error.message}`)
++    }
++    setBusyKey(null)
++  }
++
++  const buyTheme = async (themeKey: ThemeKey, customName: string) => {
++    const userId = userIdRef.current
++    if (!userId || busyKey) return
++    if (coins < THEME_PRICE) return
++
++    setBusyKey(`theme:${themeKey}`)
++    const { error } = await supabase
++      .from('theme_purchases')
++      .insert({ user_id: userId, theme_key: themeKey, custom_name: customName })
++
++    if (!error) {
++      const newCoins = coins - THEME_PRICE
++      const { error: coinError } = await supabase.from('profiles').update({ coins: newCoins }).eq('id', userId)
++      if (coinError) console.error('[tetris] theme bought but coin deduction failed:', coinError.message, coinError)
++      setCoins(newCoins)
++      setOwnedThemeKeys((keys) => [...keys, themeKey])
++      setSyncError(null)
++    } else {
++      console.error('[tetris] failed to save theme purchase:', error.message, error)
++      setSyncError(`Theme purchase didn't save: ${error.message}`)
++    }
++    setBusyKey(null)
++  }
+ 
+   return (
+     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+-      <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Tetris</h1>
++      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
++        <h1 style={{ color: 'var(--color-accent)', margin: 0 }}>Tetris</h1>
++        <button
++          onClick={() => setShopOpen(true)}
++          style={{
++            padding: '0.4rem 0.9rem',
++            background: 'var(--color-accent)',
++            color: 'var(--color-on-accent, #fff)',
++            border: 'none',
++            borderRadius: '6px',
++            cursor: 'pointer',
++            fontSize: '0.85rem',
++            display: 'flex',
++            alignItems: 'center',
++            gap: '0.4rem',
++          }}
++        >
++          🛒 Shop <span style={{ opacity: 0.85 }}>· 🪙 {coins}</span>
++        </button>
++      </div>
++
++      {syncError && (
++        <p
++          style={{
++            background: '#fee',
++            color: '#a21112',
++            border: '1px solid #f5cccc',
++            borderRadius: '6px',
++            padding: '0.5rem 0.9rem',
++            fontSize: '0.8rem',
++            marginBottom: '1rem',
++            maxWidth: 500,
++            textAlign: 'center',
++          }}
++        >
++          ⚠️ {syncError} — check the browser console for details, and make sure the shop
++          migration has been run in Supabase.
++        </p>
++      )}
+ 
+       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+@@ -404,25 +650,6 @@ export default function TetrisPage() {
+             height={ROWS * CELL}
+             style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
+           />
+-          {started && !gameOver && !paused && (
+-            <button
+-              onClick={() => setPaused(true)}
+-              style={{
+-                position: 'absolute',
+-                top: 8,
+-                right: 8,
+-                padding: '0.25rem 0.75rem',
+-                background: '#1A1A1A',
+-                color: 'white',
+-                border: 'none',
+-                borderRadius: '4px',
+-                cursor: 'pointer',
+-                fontSize: '0.8rem',
+-              }}
+-            >
+-              Pause
+-            </button>
+-          )}
+           {(!started || gameOver || paused) && (
+             <div
+               style={{
+@@ -442,8 +669,8 @@ export default function TetrisPage() {
+                 onClick={paused ? () => setPaused(false) : resetGame}
+                 style={{
+                   padding: '0.5rem 1.5rem',
+-                  background: '#EB4600',
+-                  color: 'white',
++                  background: 'var(--color-accent)',
++                  color: 'var(--color-on-accent, #fff)',
+                   border: 'none',
+                   borderRadius: '6px',
+                   cursor: 'pointer',
+@@ -456,27 +683,77 @@ export default function TetrisPage() {
+           </div>
+         </div>
+ 
+-        <div
+-          style={{
+-            border: '2px solid #1A1A1A',
+-            borderRadius: '8px',
+-            padding: '15px',
+-            display: 'flex',
+-            flexDirection: 'column',
+-            alignItems: 'center',
+-            gap: '0.5rem',
+-          }}
+-        >
+-          <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em' }}>
+-            NEXT
+-          </p>
+-          <canvas ref={nextCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
++        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
++          <div
++            style={{
++              border: '2px solid #1A1A1A',
++              borderRadius: '8px',
++              padding: '15px',
++              display: 'flex',
++              flexDirection: 'column',
++              alignItems: 'center',
++              gap: '0.5rem',
++            }}
++          >
++            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em' }}>
++              NEXT
++            </p>
++            <canvas ref={nextCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
++          </div>
++
++          {upgrades.hold && (
++            <div
++              style={{
++                border: '2px solid #1A1A1A',
++                borderRadius: '8px',
++                padding: '15px',
++                display: 'flex',
++                flexDirection: 'column',
++                alignItems: 'center',
++                gap: '0.5rem',
++              }}
++            >
++              <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600, letterSpacing: '0.05em' }}>
++                HOLD
++              </p>
++              <canvas ref={holdCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
++            </div>
++          )}
++
++          {started && !gameOver && (
++            <button
++              onClick={() => setPaused((p) => !p)}
++              style={{
++                padding: '0.5rem 0.75rem',
++                background: '#1A1A1A',
++                color: 'white',
++                border: 'none',
++                borderRadius: '6px',
++                cursor: 'pointer',
++                fontSize: '0.85rem',
++              }}
++            >
++              {paused ? 'Resume' : 'Pause'}
++            </button>
++          )}
+         </div>
+       </div>
+ 
+-      <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>
++      <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem', textAlign: 'center' }}>
+         ← → move · ↓ soft drop · ↑ rotate · Space hard drop · P pause
++        {upgrades.hold && <> · / hold</>}
+       </p>
++
++      <ShopPanel
++        open={shopOpen}
++        onClose={() => setShopOpen(false)}
++        coins={coins}
++        upgrades={upgrades}
++        ownedThemeKeys={ownedThemeKeys}
++        busyKey={busyKey}
++        onBuyUpgrade={buyUpgrade}
++        onBuyTheme={buyTheme}
++      />
+     </main>
+   )
+-}
+\ No newline at end of file
++}
+diff --git a/app/(dome)/layout.tsx b/app/(dome)/layout.tsx
+index fd1390c..3fd584d 100644
+--- a/app/(dome)/layout.tsx
++++ b/app/(dome)/layout.tsx
+@@ -1,4 +1,5 @@
+ import SidePanel from '@/components/SidePanel'
++import ThemeLoader from '@/components/ThemeLoader'
+ 
+ export default function DomeLayout({
+   children,
+@@ -7,6 +8,7 @@ export default function DomeLayout({
+ }) {
+   return (
+     <div style={{ display: 'flex', height: '100vh' }}>
++      <ThemeLoader />
+       <SidePanel />
+       <div
+         style={{
+diff --git a/app/(dome)/profile/page.tsx b/app/(dome)/profile/page.tsx
+index 619aed2..e6861ee 100644
+--- a/app/(dome)/profile/page.tsx
++++ b/app/(dome)/profile/page.tsx
+@@ -3,6 +3,7 @@
+ import { useState, useEffect } from 'react'
+ import { createClient } from '@/lib/supabase/client'
+ import { subscribeToPush, getPushPermissionState } from '@/lib/push'
++import { THEMES, ThemeKey, applyThemeVars, isThemeKey } from '@/lib/themes'
+ 
+ const CATEGORIES = [
+   { value: 'general', label: 'General News' },
+@@ -17,6 +18,9 @@ export default function ProfilePage() {
+   const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
+   const [tetrisCrownPiece, setTetrisCrownPiece] = useState('')
+   const [nextPreviewSize, setNextPreviewSize] = useState(22)
++  const [activeTheme, setActiveTheme] = useState<ThemeKey>('dome')
++  const [ownedThemes, setOwnedThemes] = useState<{ key: ThemeKey; name: string }[]>([])
++  const [themeSaving, setThemeSaving] = useState(false)
+   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+   const [uploading, setUploading] = useState(false)
+   const [pushStatus, setPushStatus] = useState('default')
+@@ -33,7 +37,7 @@ export default function ProfilePage() {
+ 
+       const { data: profile } = await supabase
+         .from('profiles')
+-        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size')
++        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme')
+         .eq('id', user.id)
+         .single()
+ 
+@@ -44,12 +48,36 @@ export default function ProfilePage() {
+       setTetrisCrownEnabled(profile?.tetris_crown_enabled ?? true)
+       setTetrisCrownPiece(profile?.tetris_crown_piece || '')
+       setNextPreviewSize(profile?.tetris_next_preview_size || 22)
++      setActiveTheme(isThemeKey(profile?.active_theme) ? profile.active_theme : 'dome')
++
++      const { data: purchases } = await supabase
++        .from('theme_purchases')
++        .select('theme_key, custom_name')
++        .eq('user_id', user.id)
++      setOwnedThemes(
++        (purchases || [])
++          .filter((p) => isThemeKey(p.theme_key))
++          .map((p) => ({ key: p.theme_key as ThemeKey, name: p.custom_name }))
++      )
++
+       setLoading(false)
+     }
+ 
+     loadProfile()
+   }, [])
+ 
++  const handleThemeChange = async (key: ThemeKey) => {
++    setThemeSaving(true)
++    setActiveTheme(key)
++    applyThemeVars(key)
++
++    const { data: { user } } = await supabase.auth.getUser()
++    if (user) {
++      await supabase.from('profiles').upsert({ id: user.id, active_theme: key })
++    }
++    setThemeSaving(false)
++  }
++
+   useEffect(() => {
+     getPushPermissionState().then((state) => setPushStatus(state))
+   }, [])
+@@ -138,7 +166,7 @@ export default function ProfilePage() {
+ 
+   return (
+     <main style={{ padding: '2rem', maxWidth: '400px' }}>
+-      <h1 style={{ color: '#EB4600', marginBottom: '1.5rem' }}>Your Profile</h1>
++      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem' }}>Your Profile</h1>
+       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+         <label>
+           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Username</div>
+@@ -163,7 +191,7 @@ export default function ProfilePage() {
+           )}
+           <div style={{ marginTop: '0.5rem' }}>
+             <input id="avatar" type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
+-            <label htmlFor="avatar" style={{ cursor: 'pointer', color: '#EB4600' }}>{uploading ? 'Uploading...' : 'Change photo'}</label>
++            <label htmlFor="avatar" style={{ cursor: 'pointer', color: 'var(--color-accent)' }}>{uploading ? 'Uploading...' : 'Change photo'}</label>
+           </div>
+         </label>
+         <label>
+@@ -208,7 +236,7 @@ export default function ProfilePage() {
+               disabled={pushLoading}
+               style={{
+                 padding: '0.4rem 0.8rem',
+-                background: '#EB4600',
++                background: 'var(--color-accent)',
+                 color: 'white',
+                 border: 'none',
+                 borderRadius: '6px',
+@@ -267,13 +295,40 @@ export default function ProfilePage() {
+           </select>
+         </label>
+ 
++        <div>
++          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
++            Dome theme
++          </div>
++          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#999' }}>
++            Buy palettes in the Tetris shop, then pick your favorite here — it re-skins the whole Dome.
++          </p>
++          <select
++            value={activeTheme}
++            onChange={(e) => handleThemeChange(e.target.value as ThemeKey)}
++            disabled={themeSaving}
++            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
++          >
++            <option value="dome">{THEMES.dome.label} (default)</option>
++            {ownedThemes.map(({ key, name }) => (
++              <option key={key} value={key}>
++                {name} ({THEMES[key].label})
++              </option>
++            ))}
++          </select>
++          {ownedThemes.length === 0 && (
++            <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#999' }}>
++              You don&apos;t own any purchased themes yet — earn coins in Tetris and open the shop.
++            </p>
++          )}
++        </div>
++
+         {message && <p style={{ color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
+         <button
+           type="submit"
+           disabled={saving}
+           style={{
+             padding: '0.5rem',
+-            background: '#EB4600',
++            background: 'var(--color-accent)',
+             color: 'white',
+             border: 'none',
+             borderRadius: '6px',
+@@ -288,8 +343,8 @@ export default function ProfilePage() {
+           style={{
+             padding: '0.5rem',
+             background: 'transparent',
+-            color: '#EB4600',
+-            border: '1px solid #EB4600',
++            color: 'var(--color-accent)',
++            border: '1px solid var(--color-accent)',
+             borderRadius: '6px',
+             cursor: 'pointer',
+           }}
+diff --git a/app/globals.css b/app/globals.css
+index ce0d46a..c98532a 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -7,6 +7,7 @@
+   --color-text: #1a1a1a;
+   --color-accent: #eb4600;
+   --color-accent-secondary: #ffae00;
++  --color-on-accent: #ffffff;
+   --font-sans: var(--font-inter), sans-serif;
+ }
+ 
+diff --git a/components/ShopPanel.tsx b/components/ShopPanel.tsx
+new file mode 100644
+index 0000000..5276d3a
+--- /dev/null
++++ b/components/ShopPanel.tsx
+@@ -0,0 +1,313 @@
++'use client'
++
++import { useState } from 'react'
++import { PURCHASABLE_THEME_KEYS, THEMES, THEME_PRICE, ThemeKey } from '@/lib/themes'
++
++export type TetrisUpgrades = {
++  lowSpawn: boolean
++  speedLevel: number
++  ghost: boolean
++  hold: boolean
++}
++
++export const UPGRADE_PRICES = {
++  lowSpawn: 300,
++  ghost: 900,
++  hold: 500,
++}
++
++export const MAX_SPEED_LEVEL = 10
++export const speedLevelPrice = (currentLevel: number) => 150 * (currentLevel + 1)
++
++type Props = {
++  open: boolean
++  onClose: () => void
++  coins: number
++  upgrades: TetrisUpgrades
++  ownedThemeKeys: string[]
++  busyKey: string | null
++  onBuyUpgrade: (key: 'lowSpawn' | 'speed' | 'ghost' | 'hold') => void
++  onBuyTheme: (themeKey: ThemeKey, customName: string) => void
++}
++
++export default function ShopPanel({
++  open,
++  onClose,
++  coins,
++  upgrades,
++  ownedThemeKeys,
++  busyKey,
++  onBuyUpgrade,
++  onBuyTheme,
++}: Props) {
++  const [namingTheme, setNamingTheme] = useState<ThemeKey | null>(null)
++  const [themeName, setThemeName] = useState('')
++
++  const speedPrice = speedLevelPrice(upgrades.speedLevel)
++  const speedMaxed = upgrades.speedLevel >= MAX_SPEED_LEVEL
++
++  const startNaming = (key: ThemeKey) => {
++    setNamingTheme(key)
++    setThemeName(THEMES[key].label)
++  }
++
++  const confirmThemePurchase = () => {
++    if (!namingTheme) return
++    const name = themeName.trim() || THEMES[namingTheme].label
++    onBuyTheme(namingTheme, name)
++    setNamingTheme(null)
++    setThemeName('')
++  }
++
++  return (
++    <>
++      {/* backdrop */}
++      <div
++        onClick={onClose}
++        style={{
++          position: 'fixed',
++          inset: 0,
++          background: 'rgba(0,0,0,0.35)',
++          opacity: open ? 1 : 0,
++          pointerEvents: open ? 'auto' : 'none',
++          transition: 'opacity 0.2s ease',
++          zIndex: 1000,
++        }}
++      />
++
++      {/* slide-out drawer */}
++      <div
++        style={{
++          position: 'fixed',
++          top: 0,
++          right: 0,
++          height: '100vh',
++          width: 'min(360px, 100vw)',
++          background: 'var(--color-background, #fff)',
++          color: 'var(--color-text, #1a1a1a)',
++          borderLeft: '2px solid #1A1A1A',
++          boxShadow: '-6px 0 20px rgba(0,0,0,0.25)',
++          transform: open ? 'translateX(0)' : 'translateX(100%)',
++          transition: 'transform 0.25s ease',
++          zIndex: 1001,
++          display: 'flex',
++          flexDirection: 'column',
++          overflowY: 'auto',
++        }}
++      >
++        <div
++          style={{
++            padding: '1.25rem',
++            borderBottom: '1px solid #eee',
++            display: 'flex',
++            alignItems: 'center',
++            justifyContent: 'space-between',
++            position: 'sticky',
++            top: 0,
++            background: 'var(--color-background, #fff)',
++            zIndex: 1,
++          }}
++        >
++          <div>
++            <h2 style={{ margin: 0, color: 'var(--color-accent)' }}>Shop</h2>
++            <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#999' }}>
++              🪙 {coins.toLocaleString()} coins
++            </p>
++          </div>
++          <button
++            onClick={onClose}
++            aria-label="Close shop"
++            style={{
++              background: 'transparent',
++              border: '1px solid #ccc',
++              borderRadius: '6px',
++              width: 32,
++              height: 32,
++              cursor: 'pointer',
++              fontSize: '1rem',
++            }}
++          >
++            ✕
++          </button>
++        </div>
++
++        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
++          <p style={{ margin: 0, fontSize: '0.8rem', color: '#999' }}>
++            Earn 1 coin per line you clear. Spend them here.
++          </p>
++
++          {/* Upgrade: low spawn */}
++          <ShopItem
++            title="Quick Spawn"
++            description="New pieces appear 2 rows lower instead of above the board — react faster."
++            price={UPGRADE_PRICES.lowSpawn}
++            owned={upgrades.lowSpawn}
++            disabled={coins < UPGRADE_PRICES.lowSpawn}
++            busy={busyKey === 'lowSpawn'}
++            onBuy={() => onBuyUpgrade('lowSpawn')}
++          />
++
++          {/* Upgrade: speed reduction (repeatable) */}
++          <ShopItem
++            title={`Tempo Control ${upgrades.speedLevel > 0 ? `(Lv. ${upgrades.speedLevel})` : ''}`}
++            description="Softens how fast drop speed ramps up at high levels — stack it for higher scores in the late game."
++            price={speedMaxed ? null : speedPrice}
++            owned={false}
++            maxed={speedMaxed}
++            disabled={speedMaxed || coins < speedPrice}
++            busy={busyKey === 'speed'}
++            onBuy={() => onBuyUpgrade('speed')}
++            buyLabel={upgrades.speedLevel > 0 ? 'Upgrade again' : 'Buy'}
++          />
++
++          {/* Upgrade: ghost piece */}
++          <ShopItem
++            title="Hologram Piece"
++            description="Shows a translucent outline of where your piece will land if hard-dropped."
++            price={UPGRADE_PRICES.ghost}
++            owned={upgrades.ghost}
++            disabled={coins < UPGRADE_PRICES.ghost}
++            busy={busyKey === 'ghost'}
++            onBuy={() => onBuyUpgrade('ghost')}
++          />
++
++          {/* Upgrade: hold */}
++          <ShopItem
++            title="Hold Piece"
++            description={'Store the active piece and swap it back in later. Press "/" to hold/swap.'}
++            price={UPGRADE_PRICES.hold}
++            owned={upgrades.hold}
++            disabled={coins < UPGRADE_PRICES.hold}
++            busy={busyKey === 'hold'}
++            onBuy={() => onBuyUpgrade('hold')}
++          />
++
++          <div>
++            <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem' }}>Dome Themes</h3>
++            <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: '#999' }}>
++              Buying a theme re-skins the whole Dome, not just Tetris. Pick which one is active from your Profile.
++            </p>
++            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
++              {PURCHASABLE_THEME_KEYS.map((key) => {
++                const theme = THEMES[key]
++                const owned = ownedThemeKeys.includes(key)
++                return (
++                  <div
++                    key={key}
++                    style={{
++                      border: '1px solid #eee',
++                      borderRadius: '8px',
++                      padding: '0.75rem',
++                    }}
++                  >
++                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
++                      <span style={{ width: 14, height: 14, borderRadius: '50%', background: theme.accent, display: 'inline-block' }} />
++                      <span style={{ width: 14, height: 14, borderRadius: '50%', background: theme.accentSecondary, display: 'inline-block' }} />
++                      <strong style={{ fontSize: '0.9rem' }}>{theme.label}</strong>
++                    </div>
++                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#999' }}>{theme.description}</p>
++
++                    {owned ? (
++                      <span style={{ fontSize: '0.8rem', color: '#3ddc84', fontWeight: 600 }}>Owned ✓</span>
++                    ) : namingTheme === key ? (
++                      <div style={{ display: 'flex', gap: '0.4rem' }}>
++                        <input
++                          value={themeName}
++                          onChange={(e) => setThemeName(e.target.value)}
++                          maxLength={30}
++                          placeholder="Name this theme"
++                          style={{ flex: 1, padding: '0.35rem', border: '1px solid #ccc', borderRadius: '6px', fontSize: '0.85rem' }}
++                        />
++                        <button
++                          onClick={confirmThemePurchase}
++                          disabled={busyKey === `theme:${key}`}
++                          style={{
++                            padding: '0.35rem 0.6rem',
++                            background: 'var(--color-accent)',
++                            color: '#fff',
++                            border: 'none',
++                            borderRadius: '6px',
++                            cursor: 'pointer',
++                            fontSize: '0.8rem',
++                          }}
++                        >
++                          Confirm
++                        </button>
++                      </div>
++                    ) : (
++                      <button
++                        onClick={() => startNaming(key)}
++                        disabled={coins < THEME_PRICE}
++                        style={{
++                          padding: '0.35rem 0.75rem',
++                          background: coins < THEME_PRICE ? '#ccc' : 'var(--color-accent)',
++                          color: '#fff',
++                          border: 'none',
++                          borderRadius: '6px',
++                          cursor: coins < THEME_PRICE ? 'not-allowed' : 'pointer',
++                          fontSize: '0.8rem',
++                        }}
++                      >
++                        Buy — 🪙 {THEME_PRICE.toLocaleString()}
++                      </button>
++                    )}
++                  </div>
++                )
++              })}
++            </div>
++          </div>
++        </div>
++      </div>
++    </>
++  )
++}
++
++function ShopItem({
++  title,
++  description,
++  price,
++  owned,
++  maxed,
++  disabled,
++  busy,
++  onBuy,
++  buyLabel = 'Buy',
++}: {
++  title: string
++  description: string
++  price: number | null
++  owned: boolean
++  maxed?: boolean
++  disabled: boolean
++  busy: boolean
++  onBuy: () => void
++  buyLabel?: string
++}) {
++  return (
++    <div style={{ border: '1px solid #eee', borderRadius: '8px', padding: '0.75rem' }}>
++      <strong style={{ fontSize: '0.9rem' }}>{title}</strong>
++      <p style={{ margin: '0.25rem 0 0.5rem', fontSize: '0.8rem', color: '#999' }}>{description}</p>
++      {owned ? (
++        <span style={{ fontSize: '0.8rem', color: '#3ddc84', fontWeight: 600 }}>Owned ✓</span>
++      ) : maxed ? (
++        <span style={{ fontSize: '0.8rem', color: '#999', fontWeight: 600 }}>Maxed out</span>
++      ) : (
++        <button
++          onClick={onBuy}
++          disabled={disabled || busy}
++          style={{
++            padding: '0.35rem 0.75rem',
++            background: disabled || busy ? '#ccc' : 'var(--color-accent)',
++            color: '#fff',
++            border: 'none',
++            borderRadius: '6px',
++            cursor: disabled || busy ? 'not-allowed' : 'pointer',
++            fontSize: '0.8rem',
++          }}
++        >
++          {busy ? 'Buying...' : `${buyLabel} — 🪙 ${price?.toLocaleString()}`}
++        </button>
++      )}
++    </div>
++  )
++}
+diff --git a/components/SidePanel.tsx b/components/SidePanel.tsx
+index 1d2bc96..9a26651 100644
+--- a/components/SidePanel.tsx
++++ b/components/SidePanel.tsx
+@@ -108,7 +108,7 @@ export default function SidePanel() {
+   return (
+     <>
+       <nav className="side-panel">
+-        <div className="side-panel-brand">The Dome</div>
++        <div className="side-panel-brand" style={{ color: 'var(--color-accent)' }}>The Dome</div>
+         <div className="side-panel-links">
+           {navItems
+             .filter((item) => newsEnabled || item.href !== '/apps/news')
+@@ -121,8 +121,8 @@ export default function SidePanel() {
+                   href={item.href}
+                   className="side-panel-link"
+                   style={{
+-                    color: isActive ? '#FFFFFF' : '#1A1A1A',
+-                    background: isActive ? '#EB4600' : 'transparent',
++                    color: isActive ? 'var(--color-on-accent, #fff)' : 'var(--color-text, #1A1A1A)',
++                    background: isActive ? 'var(--color-accent)' : 'transparent',
+                     fontWeight: isActive ? 600 : 400,
+                     display: 'flex',
+                     alignItems: 'center',
+@@ -133,8 +133,8 @@ export default function SidePanel() {
+                   {showBadge && (
+                     <span
+                       style={{
+-                        background: isActive ? '#FFFFFF' : '#EB4600',
+-                        color: isActive ? '#EB4600' : '#FFFFFF',
++                        background: isActive ? 'var(--color-on-accent, #fff)' : 'var(--color-accent)',
++                        color: isActive ? 'var(--color-accent)' : 'var(--color-on-accent, #fff)',
+                         borderRadius: '999px',
+                         fontSize: '0.7rem',
+                         fontWeight: 700,
+@@ -154,8 +154,8 @@ export default function SidePanel() {
+           href="/profile"
+           className="side-panel-link"
+           style={{
+-            color: pathname === '/profile' ? '#FFFFFF' : '#1A1A1A',
+-            background: pathname === '/profile' ? '#EB4600' : 'transparent',
++            color: pathname === '/profile' ? 'var(--color-on-accent, #fff)' : 'var(--color-text, #1A1A1A)',
++            background: pathname === '/profile' ? 'var(--color-accent)' : 'transparent',
+             fontWeight: pathname === '/profile' ? 600 : 400,
+             marginTop: 'auto',
+           }}
+diff --git a/components/ThemeLoader.tsx b/components/ThemeLoader.tsx
+new file mode 100644
+index 0000000..ad80860
+--- /dev/null
++++ b/components/ThemeLoader.tsx
+@@ -0,0 +1,33 @@
++'use client'
++
++import { useEffect } from 'react'
++import { createClient } from '@/lib/supabase/client'
++import { applyThemeVars } from '@/lib/themes'
++
++// Applies the signed-in user's active Dome theme as CSS vars on <html>
++// as soon as any (dome) page mounts, so the purchased palette re-skins
++// the whole app (side panel, buttons, etc.), not just Tetris.
++export default function ThemeLoader() {
++  useEffect(() => {
++    const supabase = createClient()
++    let cancelled = false
++
++    const load = async () => {
++      const { data: { user } } = await supabase.auth.getUser()
++      if (!user || cancelled) return
++      const { data: profile } = await supabase
++        .from('profiles')
++        .select('active_theme')
++        .eq('id', user.id)
++        .single()
++      if (!cancelled) applyThemeVars(profile?.active_theme)
++    }
++
++    load()
++    return () => {
++      cancelled = true
++    }
++  }, [])
++
++  return null
++}
+diff --git a/lib/themes.ts b/lib/themes.ts
+new file mode 100644
+index 0000000..1e5022f
+--- /dev/null
++++ b/lib/themes.ts
+@@ -0,0 +1,99 @@
++// Palette definitions for the Dome's purchasable themes.
++// 'dome' is the free default and is never bought/owned via theme_purchases.
++// Everything else costs THEME_PRICE coins in the Tetris shop and, once
++// owned, can be activated from the Profile page.
++
++export type ThemeKey = 'dome' | 'sunset_lagoon' | 'neon_arcade' | 'pastel_dream' | 'crimson_void'
++
++export type ThemeDefinition = {
++  key: ThemeKey
++  label: string
++  description: string
++  accent: string
++  accentSecondary: string
++  background: string
++  text: string
++  onAccent: string
++  price: number | null // null = not purchasable (the default theme)
++}
++
++export const THEME_PRICE = 1000
++
++export const THEMES: Record<ThemeKey, ThemeDefinition> = {
++  dome: {
++    key: 'dome',
++    label: 'Classic Dome',
++    description: 'The original orange-on-white look.',
++    accent: '#EB4600',
++    accentSecondary: '#FFAE00',
++    background: '#ffffff',
++    text: '#1a1a1a',
++    onAccent: '#ffffff',
++    price: null,
++  },
++  sunset_lagoon: {
++    key: 'sunset_lagoon',
++    label: 'Sunset Lagoon',
++    description: 'Teal water, warm sand, sunset orange.',
++    accent: '#2A9D8F',
++    accentSecondary: '#E76F51',
++    background: '#FBF7F0',
++    text: '#264653',
++    onAccent: '#ffffff',
++    price: THEME_PRICE,
++  },
++  neon_arcade: {
++    key: 'neon_arcade',
++    label: 'Neon Arcade',
++    description: 'Blacklight blues and hot magenta.',
++    accent: '#2962FF',
++    accentSecondary: '#FF0059',
++    background: '#0B0B14',
++    text: '#E7E7FB',
++    onAccent: '#ffffff',
++    price: THEME_PRICE,
++  },
++  pastel_dream: {
++    key: 'pastel_dream',
++    label: 'Pastel Dream',
++    description: 'Soft lavender and cotton-candy pink.',
++    accent: '#D0DBEF',
++    accentSecondary: '#F5CCD4',
++    background: '#FBF9FC',
++    text: '#4A4458',
++    onAccent: '#4A4458',
++    price: THEME_PRICE,
++  },
++  crimson_void: {
++    key: 'crimson_void',
++    label: 'Crimson Void',
++    description: 'Blood red on near-black.',
++    accent: '#E40B0B',
++    accentSecondary: '#821415',
++    background: '#1F1C1F',
++    text: '#F2DEDE',
++    onAccent: '#ffffff',
++    price: THEME_PRICE,
++  },
++}
++
++export const PURCHASABLE_THEME_KEYS = (Object.keys(THEMES) as ThemeKey[]).filter(
++  (key) => THEMES[key].price !== null
++)
++
++export function isThemeKey(value: string | null | undefined): value is ThemeKey {
++  return !!value && value in THEMES
++}
++
++// Applies a theme's colors as CSS custom properties on <html>, so every
++// component that already reads var(--color-accent) etc. re-skins live.
++export function applyThemeVars(themeKey: string | null | undefined) {
++  if (typeof document === 'undefined') return
++  const theme = THEMES[isThemeKey(themeKey) ? themeKey : 'dome']
++  const root = document.documentElement.style
++  root.setProperty('--color-accent', theme.accent)
++  root.setProperty('--color-accent-secondary', theme.accentSecondary)
++  root.setProperty('--color-background', theme.background)
++  root.setProperty('--color-text', theme.text)
++  root.setProperty('--color-on-accent', theme.onAccent)
++}
+diff --git a/src/lib/supabase/client.ts.bak b/src/lib/supabase/client.ts.bak
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/supabase/migrations/002_tetris_shop.sql b/supabase/migrations/002_tetris_shop.sql
+new file mode 100644
+index 0000000..103b6af
+--- /dev/null
++++ b/supabase/migrations/002_tetris_shop.sql
+@@ -0,0 +1,38 @@
++-- Tetris Shop: coins, upgrades, and purchasable Dome themes
++-- Run this in Supabase Studio -> SQL Editor.
++
++-- 1. Currency + upgrade flags live on profiles, same pattern as the
++--    existing tetris_crown_* / tetris_next_preview_size columns.
++alter table public.profiles
++  add column if not exists coins integer not null default 0,
++  add column if not exists active_theme text not null default 'dome',
++  add column if not exists tetris_upgrade_low_spawn boolean not null default false,
++  add column if not exists tetris_upgrade_speed_level integer not null default 0,
++  add column if not exists tetris_upgrade_ghost boolean not null default false,
++  add column if not exists tetris_upgrade_hold boolean not null default false;
++
++alter table public.profiles
++  add constraint profiles_coins_non_negative check (coins >= 0);
++
++-- 2. Owned themes. A row = "this user bought this palette" + the
++--    custom name they gave it. profiles.active_theme just stores the
++--    theme_key of whichever owned theme is currently applied
++--    ('dome' is free/default and never needs a row here).
++create table if not exists public.theme_purchases (
++  id uuid primary key default gen_random_uuid(),
++  user_id uuid not null references auth.users(id) on delete cascade,
++  theme_key text not null,
++  custom_name text not null,
++  purchased_at timestamptz not null default now(),
++  unique (user_id, theme_key)
++);
++
++alter table public.theme_purchases enable row level security;
++
++create policy "Users can view their own theme purchases"
++  on public.theme_purchases for select
++  using (auth.uid() = user_id);
++
++create policy "Users can buy themes for themselves"
++  on public.theme_purchases for insert
++  with check (auth.uid() = user_id);
