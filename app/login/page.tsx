@@ -7,7 +7,11 @@ import { createClient } from '@/lib/supabase/client'
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => (
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('banned') === '1'
+      ? 'This account has been permanently banned.'
+      : null
+  ))
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -17,17 +21,33 @@ export default function LoginPage() {
     setLoading(true)
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    setLoading(false)
-
     if (error) {
+      setLoading(false)
       setError(error.message)
       return
     }
+
+    if (authData?.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_banned')
+        .eq('id', authData.user.id)
+        .single()
+
+      if (profile?.is_banned) {
+        await supabase.auth.signOut()
+        setLoading(false)
+        setError('This account has been permanently banned.')
+        return
+      }
+    }
+
+    setLoading(false)
 
     router.push('/hub')
     router.refresh()
