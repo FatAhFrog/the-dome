@@ -13,7 +13,7 @@ set search_path = public
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_new_id bigint;
+  v_new_id uuid;
   v_made_top_10 boolean := false;
 begin
   if v_user_id is null or p_score is null or p_score <= 0 then
