@@ -121,8 +121,8 @@ export default function SidePanel() {
                   href={item.href}
                   className="side-panel-link"
                   style={{
-                    color: isActive ? '#FFFFFF' : '#1A1A1A',
-                    background: isActive ? '#EB4600' : 'transparent',
+                    color: isActive ? 'var(--color-on-accent)' : 'var(--color-panel-text)',
+                    background: isActive ? 'var(--color-accent)' : 'transparent',
                     fontWeight: isActive ? 600 : 400,
                     display: 'flex',
                     alignItems: 'center',
@@ -133,8 +133,8 @@ export default function SidePanel() {
                   {showBadge && (
                     <span
                       style={{
-                        background: isActive ? '#FFFFFF' : '#EB4600',
-                        color: isActive ? '#EB4600' : '#FFFFFF',
+                        background: isActive ? 'var(--color-on-accent)' : 'var(--color-accent)',
+                        color: isActive ? 'var(--color-accent)' : 'var(--color-on-accent)',
                         borderRadius: '999px',
                         fontSize: '0.7rem',
                         fontWeight: 700,
@@ -154,8 +154,8 @@ export default function SidePanel() {
           href="/profile"
           className="side-panel-link"
           style={{
-            color: pathname === '/profile' ? '#FFFFFF' : '#1A1A1A',
-            background: pathname === '/profile' ? '#EB4600' : 'transparent',
+            color: pathname === '/profile' ? 'var(--color-on-accent)' : 'var(--color-panel-text)',
+            background: pathname === '/profile' ? 'var(--color-accent)' : 'transparent',
             fontWeight: pathname === '/profile' ? 600 : 400,
             marginTop: 'auto',
           }}
@@ -171,8 +171,9 @@ export default function SidePanel() {
             position: 'fixed',
             bottom: '1rem',
             right: '1rem',
-            background: '#1A1A1A',
-            color: 'white',
+            background: 'var(--color-panel-background)',
+            color: 'var(--color-panel-text)',
+            border: '1px solid var(--color-border)',
             padding: '0.75rem 1.25rem',
             borderRadius: '8px',
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',

@@ -16,7 +16,9 @@ async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>, 
   return (data as unknown as ScoreRow[]) || []
 }
 
-const RETRO_COLORS = ['#00c2c2', '#FFAE00', '#a259ff', '#3ddc84', '#EB4600', '#3b82f6', '#ff7a1a']
+// Rank rows cycle through the 7 theme-driven tetromino colors, same set
+// Tetris itself uses — pulled at paint time via CSS vars, never hardcoded.
+const RETRO_COLOR_VARS = ['--piece-i', '--piece-o', '--piece-t', '--piece-s', '--piece-z', '--piece-j', '--piece-l']
 
 const ordinal = (n: number) => {
   const v = n % 100
@@ -31,17 +33,17 @@ const ordinal = (n: number) => {
 
 function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
   return (
-    <div style={{ background: '#0a0a0a', border: '4px solid #EB4600', borderRadius: '4px', padding: '1.5rem', fontFamily: '"Press Start 2P", monospace', color: 'white', flex: 1, minWidth: '320px' }}>
-      <h2 style={{ textAlign: 'center', color: '#EB4600', fontSize: '1rem', marginBottom: '1.5rem', letterSpacing: '0.05em' }}>{title}</h2>
+    <div style={{ background: 'var(--color-panel-background)', border: '4px solid var(--color-accent)', borderRadius: '4px', padding: '1.5rem', fontFamily: '"Press Start 2P", monospace', color: 'var(--color-panel-text)', flex: 1, minWidth: '320px' }}>
+      <h2 style={{ textAlign: 'center', color: 'var(--color-accent)', fontSize: '1rem', marginBottom: '1.5rem', letterSpacing: '0.05em' }}>{title}</h2>
       {rows.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#666', fontSize: '0.65rem' }}>NO SCORES YET</p>
+        <p style={{ textAlign: 'center', color: 'var(--color-panel-text)', opacity: 0.5, fontSize: '0.65rem' }}>NO SCORES YET</p>
       ) : (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.6rem', color: '#999', marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.6rem', color: 'var(--color-panel-text)', opacity: 0.6, marginBottom: '1rem' }}>
             <span>RANK</span><span>NAME</span><span style={{ textAlign: 'right' }}>SCORE</span>
           </div>
           {rows.map((row, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: RETRO_COLORS[i % RETRO_COLORS.length], marginBottom: '0.9rem', lineHeight: 1.4 }}>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]})`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
               <span>{ordinal(i + 1)}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.profiles?.username || 'UNKNOWN').toUpperCase()}</span>
               <span style={{ textAlign: 'right' }}>{row.score}</span>
@@ -63,7 +65,7 @@ export default async function LeaderboardPage() {
   return (
     <main style={{ padding: '2rem' }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
-      <h1 style={{ color: '#EB4600', marginBottom: '1.5rem', fontFamily: '"Press Start 2P", monospace', fontSize: '1.3rem' }}>LEADERBOARD</h1>
+      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem', fontFamily: '"Press Start 2P", monospace', fontSize: '1.3rem' }}>LEADERBOARD</h1>
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
         <ArcadePanel title="SNAKE" rows={snakeScores} />
         <ArcadePanel title="TETRIS" rows={tetrisScores} />

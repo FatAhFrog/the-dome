@@ -48,8 +48,11 @@ export default function SnakePage() {
 
   const submitScore = useCallback(async (finalScore: number) => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('scores').insert({ user_id: user.id, game: 'snake', score: finalScore })
+    if (!user || finalScore <= 0) return
+    // Keeps `scores` pruned to the top 10 rows per game — see
+    // supabase/migrations/005_top_scores_rpc.sql.
+    const { error } = await supabase.rpc('submit_game_score', { p_game: 'snake', p_score: finalScore })
+    if (error) console.error('[snake] failed to submit score:', error.message, error)
   }, [supabase])
 
   useEffect(() => {

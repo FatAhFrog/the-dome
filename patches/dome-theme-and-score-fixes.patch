@@ -1,0 +1,676 @@
+diff --git a/app/(dome)/apps/leaderboard/page.tsx b/app/(dome)/apps/leaderboard/page.tsx
+index 6440132..4d5eea5 100644
+--- a/app/(dome)/apps/leaderboard/page.tsx
++++ b/app/(dome)/apps/leaderboard/page.tsx
+@@ -16,7 +16,9 @@ async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>,
+   return (data as unknown as ScoreRow[]) || []
+ }
+ 
+-const RETRO_COLORS = ['#00c2c2', '#FFAE00', '#a259ff', '#3ddc84', '#EB4600', '#3b82f6', '#ff7a1a']
++// Rank rows cycle through the 7 theme-driven tetromino colors, same set
++// Tetris itself uses — pulled at paint time via CSS vars, never hardcoded.
++const RETRO_COLOR_VARS = ['--piece-i', '--piece-o', '--piece-t', '--piece-s', '--piece-z', '--piece-j', '--piece-l']
+ 
+ const ordinal = (n: number) => {
+   const v = n % 100
+@@ -31,17 +33,17 @@ const ordinal = (n: number) => {
+ 
+ function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
+   return (
+-    <div style={{ background: '#0a0a0a', border: '4px solid #EB4600', borderRadius: '4px', padding: '1.5rem', fontFamily: '"Press Start 2P", monospace', color: 'white', flex: 1, minWidth: '320px' }}>
+-      <h2 style={{ textAlign: 'center', color: '#EB4600', fontSize: '1rem', marginBottom: '1.5rem', letterSpacing: '0.05em' }}>{title}</h2>
++    <div style={{ background: 'var(--color-panel-background)', border: '4px solid var(--color-accent)', borderRadius: '4px', padding: '1.5rem', fontFamily: '"Press Start 2P", monospace', color: 'var(--color-panel-text)', flex: 1, minWidth: '320px' }}>
++      <h2 style={{ textAlign: 'center', color: 'var(--color-accent)', fontSize: '1rem', marginBottom: '1.5rem', letterSpacing: '0.05em' }}>{title}</h2>
+       {rows.length === 0 ? (
+-        <p style={{ textAlign: 'center', color: '#666', fontSize: '0.65rem' }}>NO SCORES YET</p>
++        <p style={{ textAlign: 'center', color: 'var(--color-panel-text)', opacity: 0.5, fontSize: '0.65rem' }}>NO SCORES YET</p>
+       ) : (
+         <div>
+-          <div style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.6rem', color: '#999', marginBottom: '1rem' }}>
++          <div style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.6rem', color: 'var(--color-panel-text)', opacity: 0.6, marginBottom: '1rem' }}>
+             <span>RANK</span><span>NAME</span><span style={{ textAlign: 'right' }}>SCORE</span>
+           </div>
+           {rows.map((row, i) => (
+-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: RETRO_COLORS[i % RETRO_COLORS.length], marginBottom: '0.9rem', lineHeight: 1.4 }}>
++            <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]})`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
+               <span>{ordinal(i + 1)}</span>
+               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.profiles?.username || 'UNKNOWN').toUpperCase()}</span>
+               <span style={{ textAlign: 'right' }}>{row.score}</span>
+@@ -63,7 +65,7 @@ export default async function LeaderboardPage() {
+   return (
+     <main style={{ padding: '2rem' }}>
+       <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
+-      <h1 style={{ color: '#EB4600', marginBottom: '1.5rem', fontFamily: '"Press Start 2P", monospace', fontSize: '1.3rem' }}>LEADERBOARD</h1>
++      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem', fontFamily: '"Press Start 2P", monospace', fontSize: '1.3rem' }}>LEADERBOARD</h1>
+       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+         <ArcadePanel title="SNAKE" rows={snakeScores} />
+         <ArcadePanel title="TETRIS" rows={tetrisScores} />
+diff --git a/app/(dome)/apps/snake/page.tsx b/app/(dome)/apps/snake/page.tsx
+index 7c6132f..46dc1da 100644
+--- a/app/(dome)/apps/snake/page.tsx
++++ b/app/(dome)/apps/snake/page.tsx
+@@ -48,8 +48,11 @@ export default function SnakePage() {
+ 
+   const submitScore = useCallback(async (finalScore: number) => {
+     const { data: { user } } = await supabase.auth.getUser()
+-    if (!user) return
+-    await supabase.from('scores').insert({ user_id: user.id, game: 'snake', score: finalScore })
++    if (!user || finalScore <= 0) return
++    // Keeps `scores` pruned to the top 10 rows per game — see
++    // supabase/migrations/005_top_scores_rpc.sql.
++    const { error } = await supabase.rpc('submit_game_score', { p_game: 'snake', p_score: finalScore })
++    if (error) console.error('[snake] failed to submit score:', error.message, error)
+   }, [supabase])
+ 
+   useEffect(() => {
+diff --git a/app/(dome)/apps/tetris/page.tsx b/app/(dome)/apps/tetris/page.tsx
+index a647070..c1d6ba9 100644
+--- a/app/(dome)/apps/tetris/page.tsx
++++ b/app/(dome)/apps/tetris/page.tsx
+@@ -3,7 +3,7 @@
+ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+ import { createClient } from '@/lib/supabase/client'
+ import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
+-import { ThemeKey, THEME_PRICE } from '@/lib/themes'
++import { ThemeKey, THEME_PRICE, THEME_CHANGE_EVENT, DEFAULT_PIECE_COLORS, getPieceColorsFromDOM, readCssVar } from '@/lib/themes'
+ 
+ const COLS = 10
+ const ROWS = 20
+@@ -12,15 +12,10 @@ const CELL = 24
+ type Cell = string | null
+ type Board = Cell[][]
+ 
+-const COLORS: Record<string, string> = {
+-  I: '#00c2c2',
+-  O: '#FFAE00',
+-  T: '#a259ff',
+-  S: '#3ddc84',
+-  Z: '#EB4600',
+-  J: '#3b82f6',
+-  L: '#ff7a1a',
+-}
++// Piece colors are theme-driven (see lib/themes.ts). Canvas fillStyle can't
++// read CSS custom properties directly, so the *resolved* colors are read
++// off <html> into this ref on mount and whenever THEME_CHANGE_EVENT fires,
++// then used for every ctx.fillStyle assignment below instead of a literal.
+ 
+ const SHAPES: Record<string, number[][][]> = {
+   I: [
+@@ -109,6 +104,24 @@ export default function TetrisPage() {
+   const userIdRef = useRef<string | null>(null)
+   const canHoldRef = useRef(true)
+   const holdTypeRef = useRef<string | null>(null)
++  const pieceColorsRef = useRef<Record<string, string>>(DEFAULT_PIECE_COLORS)
++  const boardBgRef = useRef<string>('#fafafa')
++  const gridLineRef = useRef<string>('#eeeeee')
++  const [themeTick, setThemeTick] = useState(0)
++
++  useEffect(() => {
++    const readTheme = () => {
++      pieceColorsRef.current = getPieceColorsFromDOM()
++      boardBgRef.current = readCssVar('--color-panel-background', '#fafafa')
++      gridLineRef.current = readCssVar('--color-border', '#eeeeee')
++      // Bump state so both the main board canvas and the mini-piece
++      // canvases re-render with the freshly-read colors.
++      setThemeTick((n) => n + 1)
++    }
++    readTheme()
++    window.addEventListener(THEME_CHANGE_EVENT, readTheme)
++    return () => window.removeEventListener(THEME_CHANGE_EVENT, readTheme)
++  }, [])
+ 
+   // Higher DECAY makes repeated pieces rarer faster.
+   const DECAY = 12
+@@ -227,7 +240,7 @@ export default function TetrisPage() {
+     const newBoard = currentBoard.map((row) => [...row])
+     getCells(piece).forEach(([x, y]) => {
+       if (y >= 0 && y < ROWS && x >= 0 && x < COLS) {
+-        newBoard[y][x] = COLORS[piece.type]
++        newBoard[y][x] = pieceColorsRef.current[piece.type]
+       }
+     })
+     const lockedAboveBoard = getCells(piece).some(([, y]) => y < 0)
+@@ -297,7 +310,13 @@ export default function TetrisPage() {
+   const submitScore = useCallback(async (finalScore: number) => {
+     const userId = userIdRef.current
+     if (!userId || finalScore <= 0) return
+-    await supabase.from('scores').insert({ user_id: userId, game: 'tetris', score: finalScore })
++    // submit_game_score keeps the `scores` table pruned to the top 10 rows
++    // per game — see supabase/migrations/005_top_scores_rpc.sql.
++    const { error } = await supabase.rpc('submit_game_score', { p_game: 'tetris', p_score: finalScore })
++    if (error) {
++      console.error('[tetris] failed to submit score:', error.message, error)
++      setSyncError(`Score didn't save: ${error.message}`)
++    }
+   }, [supabase])
+ 
+   useEffect(() => {
+@@ -423,7 +442,7 @@ export default function TetrisPage() {
+     const ctx = canvas.getContext('2d')
+     if (!ctx) return
+ 
+-    ctx.fillStyle = '#fafafa'
++    ctx.fillStyle = boardBgRef.current
+     ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL)
+ 
+     board.forEach((row, y) => {
+@@ -440,13 +459,13 @@ export default function TetrisPage() {
+       if (ghost.y !== active.y) {
+         ctx.save()
+         ctx.globalAlpha = 0.25
+-        ctx.fillStyle = COLORS[ghost.type]
++        ctx.fillStyle = pieceColorsRef.current[ghost.type]
+         getCells(ghost).forEach(([x, y]) => { if (y >= 0) ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1) })
+         ctx.restore()
+       }
+     }
+     if (active) {
+-      ctx.fillStyle = COLORS[active.type]
++      ctx.fillStyle = pieceColorsRef.current[active.type]
+       getCells(active).forEach(([x, y]) => {
+         if (y >= 0) {
+           ctx.fillRect(x * CELL, y * CELL, CELL - 1, CELL - 1)
+@@ -454,7 +473,7 @@ export default function TetrisPage() {
+       })
+     }
+ 
+-    ctx.strokeStyle = '#eee'
++    ctx.strokeStyle = gridLineRef.current
+     for (let x = 0; x <= COLS; x++) {
+       ctx.beginPath()
+       ctx.moveTo(x * CELL, 0)
+@@ -467,17 +486,14 @@ export default function TetrisPage() {
+       ctx.lineTo(COLS * CELL, y * CELL)
+       ctx.stroke()
+     }
+-  }, [board, active, upgrades.ghost])
++  }, [board, active, upgrades.ghost, themeTick])
+ 
+   const drawMiniPiece = (canvas: HTMLCanvasElement | null, type: string | null, size: number) => {
+     if (!canvas) return
+     const ctx = canvas.getContext('2d')
+     if (!ctx) return
+ 
+-    ctx.fillStyle = '#fafafa'
+-    ctx.fillRect(0, 0, canvas.width, canvas.height)
+-
+-    ctx.fillStyle = '#fafafa'
++    ctx.fillStyle = boardBgRef.current
+     ctx.fillRect(0, 0, canvas.width, canvas.height)
+     if (!type) return
+     const cells = SHAPES[type][0]
+@@ -488,7 +504,7 @@ export default function TetrisPage() {
+     const offsetX = (4 - pieceWidth) / 2 - Math.min(...xs)
+     const offsetY = (4 - pieceHeight) / 2 - Math.min(...ys)
+ 
+-    ctx.fillStyle = COLORS[type]
++    ctx.fillStyle = pieceColorsRef.current[type]
+     cells.forEach(([x, y]) => {
+       ctx.fillRect((x + offsetX) * size, (y + offsetY) * size, size - 1, size - 1)
+     })
+@@ -500,11 +516,11 @@ export default function TetrisPage() {
+ 
+   useEffect(() => {
+     drawMiniPiece(nextCanvasRef.current, nextType, nextCellSize)
+-  }, [nextType, nextCellSize])
++  }, [nextType, nextCellSize, themeTick])
+ 
+   useEffect(() => {
+     drawMiniPiece(holdCanvasRef.current, holdType, nextCellSize)
+-  }, [holdType, nextCellSize])
++  }, [holdType, nextCellSize, themeTick])
+ 
+   const buyUpgrade = async (key: 'lowSpawn' | 'speed' | 'ghost' | 'hold') => {
+     const userId = userIdRef.current
+@@ -577,7 +593,7 @@ export default function TetrisPage() {
+             ref={canvasRef}
+             width={COLS * CELL}
+             height={ROWS * CELL}
+-            style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
++            style={{ border: '2px solid var(--color-panel-text)', borderRadius: '8px' }}
+           />
+           {(!started || gameOver || paused) && (
+             <div
+@@ -588,7 +604,8 @@ export default function TetrisPage() {
+                 flexDirection: 'column',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+-                background: 'rgba(255,255,255,0.92)',
++                background: 'color-mix(in srgb, var(--color-panel-background) 92%, transparent)',
++                color: 'var(--color-panel-text)',
+                 borderRadius: '8px',
+               }}
+             >
+@@ -613,19 +630,19 @@ export default function TetrisPage() {
+         </div>
+ 
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+-          <div style={{ border: '2px solid #1A1A1A', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>NEXT</p>
++          <div style={{ border: '2px solid var(--color-panel-text)', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', background: 'var(--color-panel-background)' }}>
++            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-panel-text)', opacity: 0.65, fontWeight: 600 }}>NEXT</p>
+             <canvas ref={nextCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
+           </div>
+-          {upgrades.hold && <div style={{ border: '2px solid #1A1A1A', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#666', fontWeight: 600 }}>HOLD</p>
++          {upgrades.hold && <div style={{ border: '2px solid var(--color-panel-text)', borderRadius: '8px', padding: '15px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', background: 'var(--color-panel-background)' }}>
++            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-panel-text)', opacity: 0.65, fontWeight: 600 }}>HOLD</p>
+             <canvas ref={holdCanvasRef} width={4 * nextCellSize} height={4 * nextCellSize} />
+           </div>}
+-          {started && !gameOver && <button onClick={() => setPaused((p) => !p)} style={{ padding: '0.5rem 0.75rem', background: '#1A1A1A', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{paused ? 'Resume' : 'Pause'}</button>}
++          {started && !gameOver && <button onClick={() => setPaused((p) => !p)} style={{ padding: '0.5rem 0.75rem', background: 'var(--color-accent-secondary)', color: 'var(--color-on-accent, #fff)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>{paused ? 'Resume' : 'Pause'}</button>}
+         </div>
+       </div>
+ 
+-      <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>
++      <p style={{ marginTop: '1rem', color: 'var(--color-text)', opacity: 0.6, fontSize: '0.9rem' }}>
+         ← → move · ↓ soft drop · ↑ rotate · Space hard drop · P pause{upgrades.hold && ' · / hold'}
+       </p>
+       <ShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} ownedThemeKeys={ownedThemeKeys} busyKey={busyKey} onBuyUpgrade={buyUpgrade} onBuyTheme={buyTheme} />
+diff --git a/app/globals.css b/app/globals.css
+index c98532a..20eac35 100644
+--- a/app/globals.css
++++ b/app/globals.css
+@@ -3,11 +3,30 @@
+ :root {
+   --background: #ffffff;
+   --foreground: #171717;
++
++  /* Theme surface colors — always set via lib/themes.ts:applyThemeVars().
++     These are just the "Classic Dome" defaults for first paint / logged-out
++     pages, before ThemeLoader has a profile to read. Nothing in the app
++     should hardcode a hex value that duplicates one of these. */
+   --color-background: #ffffff;
++  --color-panel-background: #f7f7f7;
+   --color-text: #1a1a1a;
++  --color-panel-text: #1a1a1a;
++  --color-border: #eeeeee;
+   --color-accent: #eb4600;
+   --color-accent-secondary: #ffae00;
+   --color-on-accent: #ffffff;
++
++  /* The 7 tetromino colors, also theme-driven. Canvas can't read var()
++     directly — see lib/themes.ts:getPieceColorsFromDOM(). */
++  --piece-i: #00c2c2;
++  --piece-o: #ffae00;
++  --piece-t: #a259ff;
++  --piece-s: #3ddc84;
++  --piece-z: #eb4600;
++  --piece-j: #3b82f6;
++  --piece-l: #ff7a1a;
++
+   --font-sans: var(--font-inter), sans-serif;
+ }
+ 
+@@ -18,21 +37,21 @@
+ }
+ 
+ ::-webkit-scrollbar-track {
+-  background: #f5f5f5;
++  background: var(--color-panel-background);
+ }
+ 
+ ::-webkit-scrollbar-thumb {
+-  background: #EB4600;
++  background: var(--color-accent);
+   border-radius: 10px;
+ }
+ 
+ ::-webkit-scrollbar-thumb:hover {
+-  background: #FFAE00;
++  background: var(--color-accent-secondary);
+ }
+ 
+ * {
+   scrollbar-width: thin;
+-  scrollbar-color: #EB4600 #f5f5f5;
++  scrollbar-color: var(--color-accent) var(--color-panel-background);
+ }
+ 
+ @theme inline {
+@@ -58,7 +77,9 @@ body {
+ .side-panel {
+   width: 200px;
+   height: 100vh;
+-  border-right: 1px solid #eee;
++  background: var(--color-panel-background);
++  color: var(--color-panel-text);
++  border-right: 1px solid var(--color-border);
+   padding: 1.5rem 1rem;
+   display: flex;
+   flex-direction: column;
+@@ -68,7 +89,7 @@ body {
+ 
+ .side-panel-brand {
+   font-weight: 700;
+-  color: #EB4600;
++  color: var(--color-accent);
+   margin-bottom: 1.5rem;
+   font-size: 1.1rem;
+ }
+@@ -84,13 +105,15 @@ body {
+   border-radius: 6px;
+   text-decoration: none;
+   white-space: nowrap;
++  color: var(--color-panel-text);
+ }
+ 
+ .side-panel-logout {
+   margin-top: auto;
+   padding: 0.5rem 0.75rem;
+   background: transparent;
+-  border: 1px solid #ccc;
++  color: var(--color-panel-text);
++  border: 1px solid var(--color-border);
+   border-radius: 6px;
+   cursor: pointer;
+   text-align: left;
+@@ -101,13 +124,13 @@ body {
+     width: 100%;
+     min-height: auto;
+     border-right: none;
+-    border-top: 1px solid #eee;
++    border-top: 1px solid var(--color-border);
+     padding: 0.5rem;
+     flex-direction: column;
+     position: fixed;
+     bottom: 0;
+     left: 0;
+-    background: white;
++    background: var(--color-panel-background);
+     z-index: 10;
+   }
+ 
+diff --git a/components/SidePanel.tsx b/components/SidePanel.tsx
+index 1d2bc96..9ff99ab 100644
+--- a/components/SidePanel.tsx
++++ b/components/SidePanel.tsx
+@@ -121,8 +121,8 @@ export default function SidePanel() {
+                   href={item.href}
+                   className="side-panel-link"
+                   style={{
+-                    color: isActive ? '#FFFFFF' : '#1A1A1A',
+-                    background: isActive ? '#EB4600' : 'transparent',
++                    color: isActive ? 'var(--color-on-accent)' : 'var(--color-panel-text)',
++                    background: isActive ? 'var(--color-accent)' : 'transparent',
+                     fontWeight: isActive ? 600 : 400,
+                     display: 'flex',
+                     alignItems: 'center',
+@@ -133,8 +133,8 @@ export default function SidePanel() {
+                   {showBadge && (
+                     <span
+                       style={{
+-                        background: isActive ? '#FFFFFF' : '#EB4600',
+-                        color: isActive ? '#EB4600' : '#FFFFFF',
++                        background: isActive ? 'var(--color-on-accent)' : 'var(--color-accent)',
++                        color: isActive ? 'var(--color-accent)' : 'var(--color-on-accent)',
+                         borderRadius: '999px',
+                         fontSize: '0.7rem',
+                         fontWeight: 700,
+@@ -154,8 +154,8 @@ export default function SidePanel() {
+           href="/profile"
+           className="side-panel-link"
+           style={{
+-            color: pathname === '/profile' ? '#FFFFFF' : '#1A1A1A',
+-            background: pathname === '/profile' ? '#EB4600' : 'transparent',
++            color: pathname === '/profile' ? 'var(--color-on-accent)' : 'var(--color-panel-text)',
++            background: pathname === '/profile' ? 'var(--color-accent)' : 'transparent',
+             fontWeight: pathname === '/profile' ? 600 : 400,
+             marginTop: 'auto',
+           }}
+@@ -171,8 +171,9 @@ export default function SidePanel() {
+             position: 'fixed',
+             bottom: '1rem',
+             right: '1rem',
+-            background: '#1A1A1A',
+-            color: 'white',
++            background: 'var(--color-panel-background)',
++            color: 'var(--color-panel-text)',
++            border: '1px solid var(--color-border)',
+             padding: '0.75rem 1.25rem',
+             borderRadius: '8px',
+             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+diff --git a/lib/themes.ts b/lib/themes.ts
+index 0b2a529..19325a2 100644
+--- a/lib/themes.ts
++++ b/lib/themes.ts
+@@ -1,25 +1,111 @@
+ export type ThemeKey = 'dome' | 'sunset_lagoon' | 'neon_arcade' | 'pastel_dream' | 'crimson_void'
+ 
++export type PieceKey = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'
++export type PieceColors = Record<PieceKey, string>
++
+ export type ThemeDefinition = {
+   key: ThemeKey
+   label: string
+   description: string
+-  accent: string
+-  accentSecondary: string
++  // Page-level surface + text
+   background: string
++  panelBackground: string
+   text: string
++  panelText: string
++  border: string
++  // Brand / interactive
++  accent: string
++  accentSecondary: string
+   onAccent: string
++  // The 7 tetromino colors. Every other color in the theme is chosen to
++  // work *with* this set, per the "bricks are the source of truth" rule.
++  pieces: PieceColors
+   price: number | null
+ }
+ 
+ export const THEME_PRICE = 1000
+ 
++// Fallback used before the DOM/theme has loaded (SSR, first paint, etc).
++export const DEFAULT_PIECE_COLORS: PieceColors = {
++  I: '#00c2c2', O: '#FFAE00', T: '#a259ff', S: '#3ddc84', Z: '#EB4600', J: '#3b82f6', L: '#ff7a1a',
++}
++
+ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
+-  dome: { key: 'dome', label: 'Classic Dome', description: 'The original orange-on-white look.', accent: '#EB4600', accentSecondary: '#FFAE00', background: '#ffffff', text: '#1a1a1a', onAccent: '#ffffff', price: null },
+-  sunset_lagoon: { key: 'sunset_lagoon', label: 'Sunset Lagoon', description: 'Teal water, warm sand, sunset orange.', accent: '#2A9D8F', accentSecondary: '#E76F51', background: '#FBF7F0', text: '#264653', onAccent: '#ffffff', price: THEME_PRICE },
+-  neon_arcade: { key: 'neon_arcade', label: 'Neon Arcade', description: 'Blacklight blues and hot magenta.', accent: '#2962FF', accentSecondary: '#FF0059', background: '#0B0B14', text: '#E7E7FB', onAccent: '#ffffff', price: THEME_PRICE },
+-  pastel_dream: { key: 'pastel_dream', label: 'Pastel Dream', description: 'Soft lavender and cotton-candy pink.', accent: '#D0DBEF', accentSecondary: '#F5CCD4', background: '#FBF9FC', text: '#4A4458', onAccent: '#4A4458', price: THEME_PRICE },
+-  crimson_void: { key: 'crimson_void', label: 'Crimson Void', description: 'Blood red on near-black.', accent: '#E40B0B', accentSecondary: '#821415', background: '#1F1C1F', text: '#F2DEDE', onAccent: '#ffffff', price: THEME_PRICE },
++  dome: {
++    key: 'dome',
++    label: 'Classic Dome',
++    description: 'The original orange-on-white look.',
++    background: '#ffffff',
++    panelBackground: '#f7f7f7',
++    text: '#1a1a1a',
++    panelText: '#1a1a1a',
++    border: '#eeeeee',
++    accent: '#EB4600',
++    accentSecondary: '#FFAE00',
++    onAccent: '#ffffff',
++    pieces: DEFAULT_PIECE_COLORS,
++    price: null,
++  },
++  sunset_lagoon: {
++    key: 'sunset_lagoon',
++    label: 'Sunset Smooth',
++    description: 'A soft, warm sunset gradient from red to teal-blue dusk.',
++    background: '#FFF8F0',
++    panelBackground: '#FFF1DE',
++    text: '#264653',
++    panelText: '#264653',
++    border: '#E8D9C5',
++    accent: '#F3722C',
++    accentSecondary: '#577590',
++    onAccent: '#ffffff',
++    pieces: { I: '#F94144', O: '#F3722C', T: '#F8961E', S: '#F9C74F', Z: '#90BE6D', J: '#43AA8B', L: '#577590' },
++    price: THEME_PRICE,
++  },
++  neon_arcade: {
++    key: 'neon_arcade',
++    label: 'Neon Glow',
++    description: 'Retro-arcade blacklight blues, magenta and cyberpunk neon.',
++    background: '#0B0B14',
++    panelBackground: '#14142A',
++    text: '#E7E7FB',
++    panelText: '#E7E7FB',
++    border: '#2A2A45',
++    accent: '#2962FF',
++    accentSecondary: '#FF0059',
++    onAccent: '#ffffff',
++    pieces: { I: '#0AD2FF', O: '#2962FF', T: '#9500FF', S: '#FF0059', Z: '#FF8C00', J: '#B4E600', L: '#0FFFDB' },
++    price: THEME_PRICE,
++  },
++  pastel_dream: {
++    key: 'pastel_dream',
++    label: 'Aether',
++    description: 'Airy, glass-like pastels — soft lavender-blue into cotton-candy pink.',
++    background: '#FBF9FC',
++    panelBackground: '#F3F0F8',
++    text: '#4A4458',
++    panelText: '#4A4458',
++    border: '#E3DCEE',
++    accent: '#D0DBEF',
++    accentSecondary: '#F5CCD4',
++    onAccent: '#4A4458',
++    pieces: { I: '#C9DEF4', O: '#D0DBEF', T: '#D8D8E9', S: '#DFD5E4', Z: '#E6D2DF', J: '#EECFD9', L: '#F5CCD4' },
++    price: THEME_PRICE,
++  },
++  crimson_void: {
++    key: 'crimson_void',
++    label: 'Red Wunz Go Fasta',
++    description: 'A very dark dome soaked in deep reds.',
++    background: '#1F1C1F',
++    panelBackground: '#40191C',
++    text: '#F2DEDE',
++    panelText: '#F2DEDE',
++    border: '#611618',
++    accent: '#E40B0B',
++    accentSecondary: '#A21112',
++    onAccent: '#ffffff',
++    pieces: { I: '#E40B0B', O: '#C30E0E', T: '#A21112', S: '#821415', Z: '#611618', J: '#40191C', L: '#1F1C1F' },
++    price: THEME_PRICE,
++  },
+ }
+ 
+ export const PURCHASABLE_THEME_KEYS = (Object.keys(THEMES) as ThemeKey[]).filter((key) => THEMES[key].price !== null)
+@@ -28,13 +114,56 @@ export function isThemeKey(value: string | null | undefined): value is ThemeKey
+   return !!value && value in THEMES
+ }
+ 
++// Fired on `window` every time applyThemeVars runs, after the CSS custom
++// properties have been written to :root. Anything that can't consume CSS
++// vars directly (canvas fillStyle, etc.) should listen for this and re-read
++// the resolved colors via getPieceColorsFromDOM()/readCssVar().
++export const THEME_CHANGE_EVENT = 'dome-theme-change'
++
+ export function applyThemeVars(themeKey: string | null | undefined) {
+   if (typeof document === 'undefined') return
+   const theme = THEMES[isThemeKey(themeKey) ? themeKey : 'dome']
+   const root = document.documentElement.style
+-  root.setProperty('--color-accent', theme.accent)
+-  root.setProperty('--color-accent-secondary', theme.accentSecondary)
++
+   root.setProperty('--color-background', theme.background)
++  root.setProperty('--color-panel-background', theme.panelBackground)
+   root.setProperty('--color-text', theme.text)
++  root.setProperty('--color-panel-text', theme.panelText)
++  root.setProperty('--color-border', theme.border)
++  root.setProperty('--color-accent', theme.accent)
++  root.setProperty('--color-accent-secondary', theme.accentSecondary)
+   root.setProperty('--color-on-accent', theme.onAccent)
++
++  root.setProperty('--piece-i', theme.pieces.I)
++  root.setProperty('--piece-o', theme.pieces.O)
++  root.setProperty('--piece-t', theme.pieces.T)
++  root.setProperty('--piece-s', theme.pieces.S)
++  root.setProperty('--piece-z', theme.pieces.Z)
++  root.setProperty('--piece-j', theme.pieces.J)
++  root.setProperty('--piece-l', theme.pieces.L)
++
++  window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: { themeKey: theme.key } }))
++}
++
++// Reads a single CSS custom property off <html>, already resolved to a real
++// color value the Canvas 2D API can use for fillStyle (unlike `var(--x)`,
++// which Canvas does not understand).
++export function readCssVar(name: string, fallback: string): string {
++  if (typeof document === 'undefined') return fallback
++  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
++  return value || fallback
++}
++
++// Convenience wrapper for the 7 tetromino colors specifically — this is
++// what TetrisPage should call on mount and on THEME_CHANGE_EVENT.
++export function getPieceColorsFromDOM(): PieceColors {
++  return {
++    I: readCssVar('--piece-i', DEFAULT_PIECE_COLORS.I),
++    O: readCssVar('--piece-o', DEFAULT_PIECE_COLORS.O),
++    T: readCssVar('--piece-t', DEFAULT_PIECE_COLORS.T),
++    S: readCssVar('--piece-s', DEFAULT_PIECE_COLORS.S),
++    Z: readCssVar('--piece-z', DEFAULT_PIECE_COLORS.Z),
++    J: readCssVar('--piece-j', DEFAULT_PIECE_COLORS.J),
++    L: readCssVar('--piece-l', DEFAULT_PIECE_COLORS.L),
++  }
+ }
+diff --git a/supabase/migrations/005_top_scores_rpc.sql b/supabase/migrations/005_top_scores_rpc.sql
+new file mode 100644
+index 0000000..1303b57
+--- /dev/null
++++ b/supabase/migrations/005_top_scores_rpc.sql
+@@ -0,0 +1,56 @@
++-- Keeps public.scores capped at the top 10 rows per game.
++--
++-- Always inserts the new score (cheap, and avoids a race where two players
++-- submit at the same instant and both read a stale "10th place" threshold),
++-- then deletes anything outside the top 10 for that game. Returns true when
++-- the submitted score actually landed in the top 10, false otherwise, so
++-- the client can show a "new high score!" state if it wants to.
++create or replace function public.submit_game_score(p_game text, p_score integer)
++returns boolean
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_user_id uuid := auth.uid();
++  v_new_id bigint;
++  v_made_top_10 boolean := false;
++begin
++  if v_user_id is null or p_score is null or p_score <= 0 then
++    return false;
++  end if;
++
++  -- Mirrors the "banned users cannot insert scores" RLS policy — this
++  -- function runs as SECURITY DEFINER, so RLS is bypassed and the check
++  -- has to be re-applied here explicitly.
++  if exists (select 1 from public.profiles where id = v_user_id and is_banned = true) then
++    return false;
++  end if;
++
++  insert into public.scores (user_id, game, score)
++  values (v_user_id, p_game, p_score)
++  returning id into v_new_id;
++
++  select exists (
++    select 1 from (
++      select id, row_number() over (order by score desc, created_at asc) as rn
++      from public.scores
++      where game = p_game
++    ) ranked
++    where ranked.id = v_new_id and ranked.rn <= 10
++  ) into v_made_top_10;
++
++  delete from public.scores
++  where id in (
++    select id from public.scores
++    where game = p_game
++    order by score desc, created_at asc
++    offset 10
++  );
++
++  return v_made_top_10;
++end;
++$$;
++
++revoke all on function public.submit_game_score(text, integer) from public;
++grant execute on function public.submit_game_score(text, integer) to authenticated;
