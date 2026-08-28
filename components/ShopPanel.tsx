@@ -11,7 +11,7 @@ export type TetrisUpgrades = {
 }
 
 export const UPGRADE_PRICES = {
-  lowSpawn: 100,
+  lowSpawn: 300,
   ghost: 900,
   hold: 500,
 }

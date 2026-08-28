@@ -1,10 +1,12 @@
 diff --git a/app/(dome)/apps/tetris/page.tsx b/app/(dome)/apps/tetris/page.tsx
-index 6abc965..13efaf7 100644
+index 6abc965..bac4dd6 100644
 --- a/app/(dome)/apps/tetris/page.tsx
 +++ b/app/(dome)/apps/tetris/page.tsx
-@@ -2,6 +2,8 @@
+@@ -1,7 +1,9 @@
+ 'use client'
  
- import { useEffect, useRef, useState, useCallback } from 'react'
+-import { useEffect, useRef, useState, useCallback } from 'react'
++import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
  import { createClient } from '@/lib/supabase/client'
 +import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
 +import { ThemeKey, THEME_PRICE } from '@/lib/themes'
@@ -40,6 +42,7 @@ index 6abc965..13efaf7 100644
    const [started, setStarted] = useState(false)
    const [paused, setPaused] = useState(false)
    const [nextCellSize, setNextCellSize] = useState(22)
+-  const supabase = createClient()
 +
 +  // Shop / economy state
 +  const [coins, setCoins] = useState(0)
@@ -48,7 +51,7 @@ index 6abc965..13efaf7 100644
 +  const [shopOpen, setShopOpen] = useState(false)
 +  const [busyKey, setBusyKey] = useState<string | null>(null)
 +
-   const supabase = createClient()
++  const supabase = useMemo(() => createClient(), [])
    const submittedRef = useRef(false)
    const streakTypeRef = useRef<string | null>(null)
    const streakCountRef = useRef(0)
@@ -109,7 +112,7 @@ index 6abc965..13efaf7 100644
    }, [supabase])
  
    const getCells = (piece: ActivePiece) =>
-@@ -159,9 +206,18 @@ export default function TetrisPage() {
+@@ -159,9 +206,61 @@ export default function TetrisPage() {
    }
  
    const spawnPiece = useCallback((type: string): ActivePiece => {
@@ -126,15 +129,59 @@ index 6abc965..13efaf7 100644
 +    return dropped
 +  }
 +
++  // Coins are earned/spent through Postgres RPCs (see migration 003) that
++  // mutate and return the authoritative balance in one atomic round trip.
++  // We never trust local state alone — every earn and every spend is
++  // re-verified against what the server actually stored, and local state
++  // is corrected to match the response.
++  const [syncError, setSyncError] = useState<string | null>(null)
++
++  const earnCoins = useCallback(async (amount: number) => {
++    const userId = userIdRef.current
++    if (!userId || amount <= 0) return
++    const { data, error } = await supabase.rpc('earn_coins', { p_amount: amount })
++    if (error) {
++      console.error('[tetris] failed to save earned coins:', error.message, error)
++      setSyncError(`Coins didn't save: ${error.message}`)
++      return
++    }
++    if (typeof data === 'number') {
++      setCoins(data) // reconcile local balance with the verified server value
++      setSyncError(null)
++    }
++  }, [supabase])
++
++  // Returns the verified new balance on success, or null on failure
++  // (including "insufficient funds," which the DB checks atomically so a
++  // double-click or two tabs open at once can't overspend).
++  const spendCoins = useCallback(async (amount: number): Promise<number | null> => {
++    const userId = userIdRef.current
++    if (!userId || amount <= 0) return null
++    const { data, error } = await supabase.rpc('spend_coins', { p_amount: amount })
++    if (error) {
++      console.error('[tetris] failed to spend coins:', error.message, error)
++      setSyncError(`Purchase didn't save: ${error.message}`)
++      return null
++    }
++    if (data === null) {
++      setSyncError('Not enough coins for that purchase.')
++      return null
++    }
++    setCoins(data) // reconcile local balance with the verified server value
++    setSyncError(null)
++    return data
++  }, [supabase])
++
    const lockPiece = useCallback((piece: ActivePiece, currentBoard: Board) => {
      const newBoard = currentBoard.map((row) => [...row])
      getCells(piece).forEach(([x, y]) => {
-@@ -193,9 +249,12 @@ export default function TetrisPage() {
+@@ -193,9 +292,13 @@ export default function TetrisPage() {
          setLevel(1 + Math.floor(newLines / 10))
          return newLines
        })
-+      // 1 coin per line cleared.
-+      setCoins((c) => c + clearedLines)
++      // 1 coin per line cleared — earned and verified against the server
++      // immediately, not just bumped in local state.
++      void earnCoins(clearedLines)
      }
  
      setBoard(filteredBoard)
@@ -142,7 +189,16 @@ index 6abc965..13efaf7 100644
  
      const newType = nextType
      const upcoming = drawPiece()
-@@ -219,6 +278,8 @@ export default function TetrisPage() {
+@@ -208,7 +311,7 @@ export default function TetrisPage() {
+     } else {
+       setActive(spawned)
+     }
+-  }, [nextType, spawnPiece, level, drawPiece])
++  }, [nextType, spawnPiece, level, drawPiece, earnCoins])
+ 
+   const resetGame = () => {
+     const fresh = emptyBoard()
+@@ -219,6 +322,8 @@ export default function TetrisPage() {
      setGameOver(false)
      submittedRef.current = false
      setPaused(false)
@@ -151,39 +207,51 @@ index 6abc965..13efaf7 100644
      streakTypeRef.current = null
      streakCountRef.current = 0
      const firstType = drawPiece()
-@@ -241,6 +302,31 @@ export default function TetrisPage() {
+@@ -229,9 +334,9 @@ export default function TetrisPage() {
+   }
+ 
+   const submitScore = useCallback(async (finalScore: number) => {
+-    const { data: { user } } = await supabase.auth.getUser()
+-    if (!user) return
+-    await supabase.from('scores').insert({ user_id: user.id, game: 'tetris', score: finalScore })
++    const userId = userIdRef.current
++    if (!userId || finalScore <= 0) return
++    await supabase.from('scores').insert({ user_id: userId, game: 'tetris', score: finalScore })
+   }, [supabase])
+ 
+   useEffect(() => {
+@@ -241,6 +346,30 @@ export default function TetrisPage() {
      }
    }, [gameOver, score, submitScore])
  
-+  // Persist coin balance whenever it changes (line clears, purchases).
-+  const coinsLoadedRef = useRef(false)
-+  const [syncError, setSyncError] = useState<string | null>(null)
++  // Score is tracked entirely client-side during play and only ever
++  // written once, at the very end — either a normal game over, or the
++  // player navigating away from Tetris mid-game. The empty dependency
++  // array is deliberate: this effect's cleanup only runs on the actual
++  // unmount (leaving the page), not on every re-render.
++  const startedRef = useRef(started)
++  const gameOverRef = useRef(gameOver)
++  const scoreRef = useRef(score)
++  const submitScoreRef = useRef(submitScore)
++  startedRef.current = started
++  gameOverRef.current = gameOver
++  scoreRef.current = score
++  submitScoreRef.current = submitScore
++
 +  useEffect(() => {
-+    if (!coinsLoadedRef.current) {
-+      // Skip the very first write, which just mirrors what we loaded.
-+      coinsLoadedRef.current = true
-+      return
++    return () => {
++      if (startedRef.current && !gameOverRef.current && !submittedRef.current && scoreRef.current > 0) {
++        submittedRef.current = true
++        submitScoreRef.current(scoreRef.current)
++      }
 +    }
-+    const userId = userIdRef.current
-+    if (!userId) return
-+    supabase
-+      .from('profiles')
-+      .update({ coins })
-+      .eq('id', userId)
-+      .then(({ error }) => {
-+        if (error) {
-+          console.error('[tetris] failed to save coins:', error.message, error)
-+          setSyncError(`Coins didn't save: ${error.message}`)
-+        } else {
-+          setSyncError(null)
-+        }
-+      })
-+  }, [coins, supabase])
++  }, [])
++
 +
    const tryMove = useCallback((dx: number, dy: number) => {
      const piece = activeRef.current
      if (!piece) return false
-@@ -273,16 +359,52 @@ export default function TetrisPage() {
+@@ -273,16 +402,52 @@ export default function TetrisPage() {
    const hardDrop = useCallback(() => {
      const piece = activeRef.current
      if (!piece) return
@@ -240,7 +308,7 @@ index 6abc965..13efaf7 100644
        if (!started || gameOver) return
        if (e.key === 'p' || e.key === 'P') { setPaused((p) => !p); return }
        if (paused) return
-@@ -290,15 +412,19 @@ export default function TetrisPage() {
+@@ -290,15 +455,19 @@ export default function TetrisPage() {
        else if (e.key === 'ArrowRight') tryMove(1, 0)
        else if (e.key === 'ArrowDown') tryMove(0, 1)
        else if (e.key === 'ArrowUp') tryRotate()
@@ -264,7 +332,7 @@ index 6abc965..13efaf7 100644
      const interval = setInterval(() => {
        const piece = activeRef.current
        if (!piece) return
-@@ -310,7 +436,7 @@ export default function TetrisPage() {
+@@ -310,7 +479,7 @@ export default function TetrisPage() {
        }
      }, speed)
      return () => clearInterval(interval)
@@ -273,7 +341,7 @@ index 6abc965..13efaf7 100644
  
    const draw = useCallback(() => {
      const canvas = canvasRef.current
-@@ -330,6 +456,19 @@ export default function TetrisPage() {
+@@ -330,6 +499,19 @@ export default function TetrisPage() {
        })
      })
  
@@ -293,7 +361,7 @@ index 6abc965..13efaf7 100644
      if (active) {
        ctx.fillStyle = COLORS[active.type]
        getCells(active).forEach(([x, y]) => {
-@@ -352,18 +491,18 @@ export default function TetrisPage() {
+@@ -352,18 +534,18 @@ export default function TetrisPage() {
        ctx.lineTo(COLS * CELL, y * CELL)
        ctx.stroke()
      }
@@ -316,7 +384,7 @@ index 6abc965..13efaf7 100644
      const xs = cells.map(([x]) => x)
      const ys = cells.map(([, y]) => y)
      const pieceWidth = Math.max(...xs) - Math.min(...xs) + 1
-@@ -371,23 +510,130 @@ export default function TetrisPage() {
+@@ -371,23 +553,144 @@ export default function TetrisPage() {
      const offsetX = (4 - pieceWidth) / 2 - Math.min(...xs)
      const offsetY = (4 - pieceHeight) / 2 - Math.min(...ys)
  
@@ -368,18 +436,28 @@ index 6abc965..13efaf7 100644
 +    if (coins < price) return
 +
 +    setBusyKey(key)
-+    const newCoins = coins - price
-+    const updatePayload: Record<string, number | boolean> = { coins: newCoins }
++
++    // Spend first — atomic and server-verified, so a stale local balance
++    // can never let someone buy something they can't afford.
++    const balanceAfterSpend = await spendCoins(price)
++    if (balanceAfterSpend === null) {
++      setBusyKey(null)
++      return
++    }
++
++    const updatePayload: Record<string, number | boolean> = {}
 +    updatePayload[column] = key === 'speed' ? nextUpgrades.speedLevel : true
 +
 +    const { error } = await supabase.from('profiles').update(updatePayload).eq('id', userId)
 +    if (!error) {
-+      setCoins(newCoins)
 +      setUpgrades(nextUpgrades)
 +      setSyncError(null)
 +    } else {
-+      console.error('[tetris] failed to save upgrade purchase:', error.message, error)
-+      setSyncError(`Purchase didn't save: ${error.message}`)
++      console.error('[tetris] upgrade flag failed to save, refunding coins:', error.message, error)
++      // The coin spend already went through — refund it so the player
++      // isn't charged for an upgrade that never actually applied.
++      await earnCoins(price)
++      setSyncError(`Purchase didn't save (coins refunded): ${error.message}`)
 +    }
 +    setBusyKey(null)
 +  }
@@ -390,20 +468,24 @@ index 6abc965..13efaf7 100644
 +    if (coins < THEME_PRICE) return
 +
 +    setBusyKey(`theme:${themeKey}`)
++
++    const balanceAfterSpend = await spendCoins(THEME_PRICE)
++    if (balanceAfterSpend === null) {
++      setBusyKey(null)
++      return
++    }
++
 +    const { error } = await supabase
 +      .from('theme_purchases')
 +      .insert({ user_id: userId, theme_key: themeKey, custom_name: customName })
 +
 +    if (!error) {
-+      const newCoins = coins - THEME_PRICE
-+      const { error: coinError } = await supabase.from('profiles').update({ coins: newCoins }).eq('id', userId)
-+      if (coinError) console.error('[tetris] theme bought but coin deduction failed:', coinError.message, coinError)
-+      setCoins(newCoins)
 +      setOwnedThemeKeys((keys) => [...keys, themeKey])
 +      setSyncError(null)
 +    } else {
-+      console.error('[tetris] failed to save theme purchase:', error.message, error)
-+      setSyncError(`Theme purchase didn't save: ${error.message}`)
++      console.error('[tetris] theme purchase failed to save, refunding coins:', error.message, error)
++      await earnCoins(THEME_PRICE)
++      setSyncError(`Theme purchase didn't save (coins refunded): ${error.message}`)
 +    }
 +    setBusyKey(null)
 +  }
@@ -453,7 +535,7 @@ index 6abc965..13efaf7 100644
  
        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-@@ -404,25 +650,6 @@ export default function TetrisPage() {
+@@ -404,25 +707,6 @@ export default function TetrisPage() {
              height={ROWS * CELL}
              style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
            />
@@ -479,7 +561,7 @@ index 6abc965..13efaf7 100644
            {(!started || gameOver || paused) && (
              <div
                style={{
-@@ -442,8 +669,8 @@ export default function TetrisPage() {
+@@ -442,8 +726,8 @@ export default function TetrisPage() {
                  onClick={paused ? () => setPaused(false) : resetGame}
                  style={{
                    padding: '0.5rem 1.5rem',
@@ -490,7 +572,7 @@ index 6abc965..13efaf7 100644
                    border: 'none',
                    borderRadius: '6px',
                    cursor: 'pointer',
-@@ -456,27 +683,77 @@ export default function TetrisPage() {
+@@ -456,27 +740,77 @@ export default function TetrisPage() {
            </div>
          </div>
  
@@ -1278,10 +1360,10 @@ deleted file mode 100644
 index e69de29..0000000
 diff --git a/supabase/migrations/002_tetris_shop.sql b/supabase/migrations/002_tetris_shop.sql
 new file mode 100644
-index 0000000..103b6af
+index 0000000..096d9bd
 --- /dev/null
 +++ b/supabase/migrations/002_tetris_shop.sql
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,45 @@
 +-- Tetris Shop: coins, upgrades, and purchasable Dome themes
 +-- Run this in Supabase Studio -> SQL Editor.
 +
@@ -1295,8 +1377,15 @@ index 0000000..103b6af
 +  add column if not exists tetris_upgrade_ghost boolean not null default false,
 +  add column if not exists tetris_upgrade_hold boolean not null default false;
 +
-+alter table public.profiles
-+  add constraint profiles_coins_non_negative check (coins >= 0);
++do $$
++begin
++  if not exists (
++    select 1 from pg_constraint where conname = 'profiles_coins_non_negative'
++  ) then
++    alter table public.profiles
++      add constraint profiles_coins_non_negative check (coins >= 0);
++  end if;
++end $$;
 +
 +-- 2. Owned themes. A row = "this user bought this palette" + the
 +--    custom name they gave it. profiles.active_theme just stores the
@@ -1320,3 +1409,65 @@ index 0000000..103b6af
 +create policy "Users can buy themes for themselves"
 +  on public.theme_purchases for insert
 +  with check (auth.uid() = user_id);
+diff --git a/supabase/migrations/003_coin_rpcs.sql b/supabase/migrations/003_coin_rpcs.sql
+new file mode 100644
+index 0000000..33d4c4b
+--- /dev/null
++++ b/supabase/migrations/003_coin_rpcs.sql
+@@ -0,0 +1,56 @@
++-- Atomic coin earn/spend. The frontend was trusting local React state and
++-- writing it back via a reactive effect, which gave zero signal on failure
++-- and no guarantee the write actually matched the server's truth. These
++-- functions do the mutation AND return the authoritative new balance in
++-- one round trip, so the client can verify every single earn and spend
++-- against the database instead of assuming its local number is right.
++--
++-- auth.uid() is used instead of a passed-in user id so a user can only
++-- ever earn/spend coins on their own row.
++
++create or replace function public.earn_coins(p_amount integer)
++returns integer
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  new_balance integer;
++begin
++  if p_amount <= 0 then
++    raise exception 'amount must be positive';
++  end if;
++
++  update public.profiles
++  set coins = coins + p_amount
++  where id = auth.uid()
++  returning coins into new_balance;
++
++  return new_balance; -- null if no matching row (shouldn't happen for a signed-in user)
++end;
++$$;
++
++create or replace function public.spend_coins(p_amount integer)
++returns integer
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  new_balance integer;
++begin
++  if p_amount <= 0 then
++    raise exception 'amount must be positive';
++  end if;
++
++  update public.profiles
++  set coins = coins - p_amount
++  where id = auth.uid() and coins >= p_amount
++  returning coins into new_balance;
++
++  return new_balance; -- null => insufficient funds (or no row), caller must treat as failure
++end;
++$$;
++
++grant execute on function public.earn_coins(integer) to authenticated;
++grant execute on function public.spend_coins(integer) to authenticated;

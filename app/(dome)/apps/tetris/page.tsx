@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import ShopPanel, { TetrisUpgrades, UPGRADE_PRICES, MAX_SPEED_LEVEL, speedLevelPrice } from '@/components/ShopPanel'
 import { ThemeKey, THEME_PRICE } from '@/lib/themes'
@@ -102,7 +102,7 @@ export default function TetrisPage() {
   const [ownedThemeKeys, setOwnedThemeKeys] = useState<string[]>([])
   const [shopOpen, setShopOpen] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const submittedRef = useRef(false)
   const streakTypeRef = useRef<string | null>(null)
   const streakCountRef = useRef(0)
@@ -190,6 +190,39 @@ export default function TetrisPage() {
     return dropped
   }
 
+  const [syncError, setSyncError] = useState<string | null>(null)
+
+  const earnCoins = useCallback(async (amount: number) => {
+    if (!userIdRef.current || amount <= 0) return
+    const { data, error } = await supabase.rpc('earn_coins', { p_amount: amount })
+    if (error) {
+      console.error('[tetris] failed to save earned coins:', error.message, error)
+      setSyncError(`Coins didn't save: ${error.message}`)
+      return
+    }
+    if (typeof data === 'number') {
+      setCoins(data)
+      setSyncError(null)
+    }
+  }, [supabase])
+
+  const spendCoins = useCallback(async (amount: number): Promise<number | null> => {
+    if (!userIdRef.current || amount <= 0) return null
+    const { data, error } = await supabase.rpc('spend_coins', { p_amount: amount })
+    if (error) {
+      console.error('[tetris] failed to spend coins:', error.message, error)
+      setSyncError(`Purchase didn't save: ${error.message}`)
+      return null
+    }
+    if (data === null) {
+      setSyncError('Not enough coins for that purchase.')
+      return null
+    }
+    setCoins(data)
+    setSyncError(null)
+    return data
+  }, [supabase])
+
   const lockPiece = useCallback((piece: ActivePiece, currentBoard: Board) => {
     const newBoard = currentBoard.map((row) => [...row])
     getCells(piece).forEach(([x, y]) => {
@@ -221,7 +254,7 @@ export default function TetrisPage() {
         setLevel(1 + Math.floor(newLines / 10))
         return newLines
       })
-      setCoins((c) => c + clearedLines)
+      void earnCoins(clearedLines)
     }
 
     setBoard(filteredBoard)
@@ -238,7 +271,7 @@ export default function TetrisPage() {
     } else {
       setActive(spawned)
     }
-  }, [nextType, spawnPiece, level, drawPiece])
+  }, [nextType, spawnPiece, level, drawPiece, earnCoins])
 
   const resetGame = () => {
     const fresh = emptyBoard()
@@ -262,10 +295,9 @@ export default function TetrisPage() {
   }
 
   const submitScore = useCallback(async (finalScore: number) => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const adjustedScore = upgradesRef.current.lowSpawn ? Math.round(finalScore * 1.1) : finalScore
-    await supabase.from('scores').insert({ user_id: user.id, game: 'tetris', score: adjustedScore })
+    const userId = userIdRef.current
+    if (!userId || finalScore <= 0) return
+    await supabase.from('scores').insert({ user_id: userId, game: 'tetris', score: finalScore })
   }, [supabase])
 
   useEffect(() => {
@@ -275,11 +307,25 @@ export default function TetrisPage() {
     }
   }, [gameOver, score, submitScore])
 
-  const coinsLoadedRef = useRef(false)
+  const startedRef = useRef(started)
+  const gameOverRef = useRef(gameOver)
+  const scoreRef = useRef(score)
+  const submitScoreRef = useRef(submitScore)
   useEffect(() => {
-    if (!coinsLoadedRef.current) { coinsLoadedRef.current = true; return }
-    if (userIdRef.current) supabase.from('profiles').update({ coins }).eq('id', userIdRef.current)
-  }, [coins, supabase])
+    startedRef.current = started
+    gameOverRef.current = gameOver
+    scoreRef.current = score
+    submitScoreRef.current = submitScore
+  }, [started, gameOver, score, submitScore])
+
+  useEffect(() => {
+    return () => {
+      if (startedRef.current && !gameOverRef.current && !submittedRef.current && scoreRef.current > 0) {
+        submittedRef.current = true
+        void submitScoreRef.current(scoreRef.current)
+      }
+    }
+  }, [])
 
   const tryMove = useCallback((dx: number, dy: number) => {
     const piece = activeRef.current
@@ -463,15 +509,32 @@ export default function TetrisPage() {
   const buyUpgrade = async (key: 'lowSpawn' | 'speed' | 'ghost' | 'hold') => {
     const userId = userIdRef.current
     if (!userId || busyKey) return
-    const price = key === 'speed' ? speedLevelPrice(upgrades.speedLevel) : UPGRADE_PRICES[key]
-    if (key === 'speed' && upgrades.speedLevel >= MAX_SPEED_LEVEL) return
-    if (key !== 'speed' && upgrades[key]) return
+    let price: number
+    let column: string
+    let nextUpgrades: TetrisUpgrades
+    if (key === 'speed') {
+      if (upgrades.speedLevel >= MAX_SPEED_LEVEL) return
+      price = speedLevelPrice(upgrades.speedLevel)
+      column = 'tetris_upgrade_speed_level'
+      nextUpgrades = { ...upgrades, speedLevel: upgrades.speedLevel + 1 }
+    } else {
+      if (upgrades[key]) return
+      price = UPGRADE_PRICES[key]
+      column = key === 'lowSpawn' ? 'tetris_upgrade_low_spawn' : `tetris_upgrade_${key}`
+      nextUpgrades = { ...upgrades, [key]: true }
+    }
     if (coins < price) return
     setBusyKey(key)
-    const nextUpgrades = key === 'speed' ? { ...upgrades, speedLevel: upgrades.speedLevel + 1 } : { ...upgrades, [key]: true }
-    const column = key === 'speed' ? 'tetris_upgrade_speed_level' : key === 'lowSpawn' ? 'tetris_upgrade_low_spawn' : `tetris_upgrade_${key}`
-    const { error } = await supabase.from('profiles').update({ coins: coins - price, [column]: key === 'speed' ? nextUpgrades.speedLevel : true }).eq('id', userId)
-    if (!error) { setCoins(coins - price); setUpgrades(nextUpgrades) }
+    const balanceAfterSpend = await spendCoins(price)
+    if (balanceAfterSpend === null) { setBusyKey(null); return }
+    const { error } = await supabase.from('profiles').update({ [column]: key === 'speed' ? nextUpgrades.speedLevel : true }).eq('id', userId)
+    if (!error) {
+      setUpgrades(nextUpgrades)
+      setSyncError(null)
+    } else {
+      await earnCoins(price)
+      setSyncError(`Purchase didn't save (coins refunded): ${error.message}`)
+    }
     setBusyKey(null)
   }
 
@@ -479,11 +542,15 @@ export default function TetrisPage() {
     const userId = userIdRef.current
     if (!userId || busyKey || coins < THEME_PRICE || ownedThemeKeys.includes(themeKey)) return
     setBusyKey(`theme:${themeKey}`)
+    const balanceAfterSpend = await spendCoins(THEME_PRICE)
+    if (balanceAfterSpend === null) { setBusyKey(null); return }
     const { error } = await supabase.from('theme_purchases').insert({ user_id: userId, theme_key: themeKey, custom_name: customName })
     if (!error) {
-      await supabase.from('profiles').update({ coins: coins - THEME_PRICE }).eq('id', userId)
-      setCoins(coins - THEME_PRICE)
       setOwnedThemeKeys((keys) => [...keys, themeKey])
+      setSyncError(null)
+    } else {
+      await earnCoins(THEME_PRICE)
+      setSyncError(`Theme purchase didn't save (coins refunded): ${error.message}`)
     }
     setBusyKey(null)
   }
@@ -494,6 +561,8 @@ export default function TetrisPage() {
         <h1 style={{ color: 'var(--color-accent)', margin: 0 }}>Tetris</h1>
         <button onClick={() => setShopOpen(true)} style={{ padding: '0.4rem 0.9rem', background: 'var(--color-accent)', color: 'var(--color-on-accent, #fff)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Shop - Coins {coins}</button>
       </div>
+
+      {syncError && <p style={{ background: '#fee', color: '#a21112', border: '1px solid #f5cccc', borderRadius: '6px', padding: '0.5rem 0.9rem', fontSize: '0.8rem', marginBottom: '1rem', maxWidth: 500, textAlign: 'center' }}>{syncError}</p>}
 
       <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
