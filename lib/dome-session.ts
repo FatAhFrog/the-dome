@@ -7,6 +7,9 @@ export type DomeProfile = {
   active_theme: string | null
   news_enabled: boolean
   news_category: string | null
+  weather_lat: number | null
+  weather_lon: number | null
+  weather_label: string | null
 }
 
 /** Serializable identity for the client provider. Full Auth user stays on the server. */
@@ -32,7 +35,7 @@ export const getDomeSession = cache(async (): Promise<DomeSession> => {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('is_banned, active_theme, news_enabled, news_category')
+    .select('is_banned, active_theme, news_enabled, news_category, weather_lat, weather_lon, weather_label')
     .eq('id', user.id)
     .single()
 
@@ -46,6 +49,9 @@ export const getDomeSession = cache(async (): Promise<DomeSession> => {
       active_theme: profile.active_theme ?? null,
       news_enabled: profile.news_enabled ?? true,
       news_category: profile.news_category ?? 'general',
+      weather_lat: profile.weather_lat ?? null,
+      weather_lon: profile.weather_lon ?? null,
+      weather_label: profile.weather_label ?? null,
     },
   }
 })
