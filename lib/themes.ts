@@ -123,7 +123,7 @@ export const THEME_CHANGE_EVENT = 'dome-theme-change'
 /** `:root` custom properties for SSR so first HTML already has the active theme. */
 export function themeCssText(themeKey: string | null | undefined): string {
   const theme = THEMES[isThemeKey(themeKey) ? themeKey : 'dome']
-  return `:root{--color-background:${theme.background};--color-panel-background:${theme.panelBackground};--color-text:${theme.text};--color-panel-text:${theme.panelText};--color-border:${theme.border};--color-accent:${theme.accent};--color-accent-secondary:${theme.accentSecondary};--color-on-accent:${theme.onAccent};--piece-i:${theme.pieces.I};--piece-o:${theme.pieces.O};--piece-t:${theme.pieces.T};--piece-s:${theme.pieces.S};--piece-z:${theme.pieces.Z};--piece-j:${theme.pieces.J};--piece-l:${theme.pieces.L}}`
+  return `:root{--color-background:${theme.background};--color-panel-background:${theme.panelBackground};--color-text:${theme.text};--color-panel-text:${theme.panelText};--color-muted:color-mix(in srgb,${theme.text} 58%,transparent);--color-border:${theme.border};--color-accent:${theme.accent};--color-accent-secondary:${theme.accentSecondary};--color-on-accent:${theme.onAccent};--piece-i:${theme.pieces.I};--piece-o:${theme.pieces.O};--piece-t:${theme.pieces.T};--piece-s:${theme.pieces.S};--piece-z:${theme.pieces.Z};--piece-j:${theme.pieces.J};--piece-l:${theme.pieces.L}}`
 }
 
 export function applyThemeVars(themeKey: string | null | undefined) {
@@ -139,6 +139,7 @@ export function applyThemeVars(themeKey: string | null | undefined) {
   root.setProperty('--color-accent', theme.accent)
   root.setProperty('--color-accent-secondary', theme.accentSecondary)
   root.setProperty('--color-on-accent', theme.onAccent)
+  root.setProperty('--color-muted', `color-mix(in srgb, ${theme.text} 58%, transparent)`)
 
   root.setProperty('--piece-i', theme.pieces.I)
   root.setProperty('--piece-o', theme.pieces.O)

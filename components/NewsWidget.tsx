@@ -26,26 +26,26 @@ export default function NewsWidget() {
     load()
   }, [category])
 
-    if (loading) return <p style={{ color: '#999' }}>Loading headlines — may take a few seconds...</p>
-    if (items.length === 0) return <p style={{ color: '#999' }}>No headlines available.</p>
+    if (loading) return <p style={{ color: 'var(--color-muted)' }}>Loading headlines — may take a few seconds...</p>
+    if (items.length === 0) return <p style={{ color: 'var(--color-muted)' }}>No headlines available.</p>
 
   return (
     <div>
-      <div style={{ borderBottom: '2px solid #1A1A1A', paddingBottom: '0.35rem', marginBottom: '0.6rem' }}>
-        <p style={{ margin: 0, fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 900, fontSize: '0.9rem', letterSpacing: '0.03em', color: '#1A1A1A' }}>
+      <div style={{ borderBottom: '2px solid var(--color-text)', paddingBottom: '0.35rem', marginBottom: '0.6rem' }}>
+        <p style={{ margin: 0, fontFamily: 'Georgia, "Times New Roman", serif', fontWeight: 900, fontSize: '0.9rem', letterSpacing: '0.03em', color: 'var(--color-text)' }}>
           DAILY DOME NEWS
         </p>
       </div>
       <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' }}>
         {items.slice(0, 5).map((item, i) => (
-          <li key={i} style={{ borderTop: i > 0 ? '1px solid #eee' : 'none', paddingTop: i > 0 ? '0.4rem' : 0, marginTop: i > 0 ? '0.4rem' : 0 }}>
-            <a href={item.link} target="_blank" rel="noopener noreferrer" style={{ color: '#1A1A1A', textDecoration: 'none', fontFamily: 'Georgia, serif', fontSize: '0.85rem', lineHeight: 1.3 }}>
+          <li key={i} style={{ borderTop: i > 0 ? '1px solid var(--color-border)' : 'none', paddingTop: i > 0 ? '0.4rem' : 0, marginTop: i > 0 ? '0.4rem' : 0 }}>
+            <a href={item.link} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text)', textDecoration: 'none', fontFamily: 'Georgia, serif', fontSize: '0.85rem', lineHeight: 1.3 }}>
               {item.title}
             </a>
           </li>
         ))}
       </ul>
-      <Link href="/apps/news" style={{ display: 'block', marginTop: '0.75rem', fontSize: '0.8rem', color: '#EB4600', textDecoration: 'none', fontWeight: 600 }}>
+      <Link href="/apps/news" style={{ display: 'block', marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--color-accent)', textDecoration: 'none', fontWeight: 600 }}>
         Read the full paper →
       </Link>
     </div>

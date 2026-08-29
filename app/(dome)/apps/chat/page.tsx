@@ -136,26 +136,27 @@ export default function ChatPage() {
 
   return (
     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Chat — #general</h1>
+      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1rem' }}>Chat — #general</h1>
       <div
         style={{
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          border: '1px solid #eee',
+          border: '1px solid var(--color-border)',
+          background: 'var(--color-panel-background)',
           borderRadius: '10px',
           padding: '1rem',
           marginBottom: '1rem',
         }}
       >
-        {messages.length === 0 && <p style={{ color: '#999' }}>No messages yet — say something!</p>}
+        {messages.length === 0 && <p style={{ color: 'var(--color-muted)' }}>No messages yet — say something!</p>}
         {messages.map((msg) => (
           <div key={msg.id} style={{ marginBottom: '0.75rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
             {msg.profiles?.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={msg.profiles.avatar_url} alt="avatar" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: '50%' }} />
             ) : (
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#eee' }} />
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--color-border)' }} />
             )}
             <div style={{ flex: 1 }}>
               <p style={{ margin: 0, fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -163,7 +164,7 @@ export default function ChatPage() {
                 {champion?.id === msg.user_id && champion.enabled && <TetrisChampionBadge piece={champion.piece} />}
               </p>
               <p style={{ margin: 0 }}>{msg.content}</p>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: '#999' }}>{new Date(msg.created_at).toLocaleTimeString()}</p>
+              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-muted)' }}>{new Date(msg.created_at).toLocaleTimeString()}</p>
             </div>
           </div>
         ))}
@@ -175,14 +176,14 @@ export default function ChatPage() {
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           placeholder="Type a message..."
-          style={{ flex: 1, padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px' }}
+          style={{ flex: 1, padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px' }}
         />
         <button
           type="submit"
           style={{
             padding: '0.5rem 1.5rem',
-            background: '#EB4600',
-            color: 'white',
+            background: 'var(--color-accent)',
+            color: 'var(--color-on-accent)',
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',

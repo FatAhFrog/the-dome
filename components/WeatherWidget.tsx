@@ -60,19 +60,19 @@ export default function WeatherWidget() {
     }
   }, [place.lat, place.lon])
 
-  if (error) return <p style={{ color: '#999' }}>{error}</p>
-  if (!weather) return <p style={{ color: '#999' }}>Loading...</p>
+  if (error) return <p style={{ color: 'var(--color-muted)' }}>{error}</p>
+  if (!weather) return <p style={{ color: 'var(--color-muted)' }}>Loading...</p>
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
       <WeatherIcon code={weather.weathercode} size={40} />
       <div>
-        <p style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0 }}>{weather.temperature}°F</p>
-        <p style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>
+        <p style={{ fontSize: '1.5rem', fontWeight: 600, margin: 0, color: 'var(--color-text)' }}>{weather.temperature}°F</p>
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-muted)', margin: 0 }}>
           {weatherDescriptions[weather.weathercode] || 'Unknown conditions'}
         </p>
-        <p style={{ fontSize: '0.75rem', color: '#999', margin: '0.2rem 0 0' }}>{placeCaption(place).headline}</p>
-        <Link href="/apps/weather" style={{ fontSize: '0.75rem', color: '#EB4600', textDecoration: 'none' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', margin: '0.2rem 0 0' }}>{placeCaption(place).headline}</p>
+        <Link href="/apps/weather" style={{ fontSize: '0.75rem', color: 'var(--color-accent)', textDecoration: 'none' }}>
           Change location
         </Link>
       </div>

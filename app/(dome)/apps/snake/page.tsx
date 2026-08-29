@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useDomeSession } from '@/components/DomeSession'
+import { readCssVar, THEME_CHANGE_EVENT } from '@/lib/themes'
 
 const GRID_SIZE = 20
 const CELL_SIZE = 20
@@ -60,15 +61,15 @@ export default function SnakePage() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return false
 
-    ctx.fillStyle = '#fafafa'
+    ctx.fillStyle = readCssVar('--color-panel-background', '#fafafa')
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
 
     const food = foodRef.current
-    ctx.fillStyle = '#FFAE00'
+    ctx.fillStyle = readCssVar('--color-accent-secondary', '#FFAE00')
     ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
 
     snakeRef.current.forEach((s, i) => {
-      ctx.fillStyle = i === 0 ? '#EB4600' : '#1A1A1A'
+      ctx.fillStyle = i === 0 ? readCssVar('--color-accent', '#EB4600') : readCssVar('--color-text', '#1A1A1A')
       ctx.fillRect(s.x * CELL_SIZE, s.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
     })
     return true
@@ -136,6 +137,14 @@ export default function SnakePage() {
   }, [gameOver, score, submitScore])
 
   useEffect(() => {
+    const onTheme = () => {
+      dirtyRef.current = true
+    }
+    window.addEventListener(THEME_CHANGE_EVENT, onTheme)
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, onTheme)
+  }, [])
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (GUARD_KEYS.has(e.key)) e.preventDefault()
       if (e.key === 'p' || e.key === 'P') {
@@ -181,15 +190,15 @@ export default function SnakePage() {
 
   return (
     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Snake</h1>
+      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1rem' }}>Snake</h1>
       <p style={{ marginBottom: '1rem' }}>Score: {score}</p>
 
-      <div style={{ position: 'relative', border: '2px solid #1A1A1A', borderRadius: '8px', overflow: 'hidden', lineHeight: 0 }}>
+      <div style={{ position: 'relative', border: '2px solid var(--color-panel-text)', borderRadius: '8px', overflow: 'hidden', lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
-          style={{ display: 'block', background: '#fafafa', colorScheme: 'light' }}
+          style={{ display: 'block', background: 'var(--color-panel-background)', colorScheme: 'light' }}
         />
         {started && !gameOver && !paused && (
           <button
@@ -199,8 +208,8 @@ export default function SnakePage() {
               top: 8,
               right: 8,
               padding: '0.25rem 0.75rem',
-              background: '#1A1A1A',
-              color: 'white',
+              background: 'var(--color-text)',
+              color: 'var(--color-background)',
               border: 'none',
               borderRadius: '4px',
               cursor: 'pointer',
@@ -219,7 +228,8 @@ export default function SnakePage() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'rgba(255,255,255,0.9)',
+              background: 'color-mix(in srgb, var(--color-panel-background) 92%, transparent)',
+              color: 'var(--color-panel-text)',
               borderRadius: '8px',
             }}
           >
@@ -229,8 +239,8 @@ export default function SnakePage() {
               onClick={paused ? () => setPaused(false) : resetGame}
               style={{
                 padding: '0.5rem 1.5rem',
-                background: '#EB4600',
-                color: 'white',
+                background: 'var(--color-accent)',
+                color: 'var(--color-on-accent)',
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -242,7 +252,7 @@ export default function SnakePage() {
         )}
       </div>
 
-      <p style={{ marginTop: '1rem', color: '#999', fontSize: '0.9rem' }}>Use arrow keys to move · P pause</p>
+      <p style={{ marginTop: '1rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Use arrow keys to move · P pause</p>
     </main>
   )
 }

@@ -159,7 +159,7 @@ export default function ProfilePage() {
       <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem' }}>Your Profile</h1>
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <label>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Username</div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>Username</div>
           <input
             type="text"
             value={username}
@@ -167,17 +167,17 @@ export default function ProfilePage() {
             required
             minLength={2}
             maxLength={30}
-            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
+            style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}
           />
         </label>
         
         <label>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Photo</div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>Photo</div>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarUrl} alt="avatar" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 6 }} />
           ) : (
-            <div style={{ width: 80, height: 80, border: '1px solid #eee', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>No pic</div>
+            <div style={{ width: 80, height: 80, border: '1px solid var(--color-border)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-muted)' }}>No pic</div>
           )}
           <div style={{ marginTop: '0.5rem' }}>
             <input id="avatar" type="file" accept="image/*" onChange={handleAvatarUpload} style={{ display: 'none' }} />
@@ -185,14 +185,14 @@ export default function ProfilePage() {
           </div>
         </label>
         <label>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
-            News preference <span style={{ fontSize: '0.8rem', color: '#999' }}>(Experimental)</span>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
+            News preference <span style={{ fontSize: '0.8rem', color: 'var(--color-muted)' }}>(Experimental)</span>
           </div>
           <select
             value={newsCategory}
             onChange={(e) => setNewsCategory(e.target.value)}
             disabled={!newsEnabled}
-            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
+            style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}
           >
             {CATEGORIES.map((cat) => (
               <option key={cat.value} value={cat.value}>
@@ -210,15 +210,15 @@ export default function ProfilePage() {
           </div>
         </label>
         <div>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
             Push notifications
           </div>
           {pushStatus === 'denied' ? (
-            <p style={{ color: '#999', margin: 0, fontSize: '0.9rem' }}>
+            <p style={{ color: 'var(--color-muted)', margin: 0, fontSize: '0.9rem' }}>
               Blocked — enable notifications for this site in your browser settings.
             </p>
           ) : pushStatus === 'unsupported' ? (
-            <p style={{ color: '#999', margin: 0, fontSize: '0.9rem' }}>Not supported on this browser.</p>
+            <p style={{ color: 'var(--color-muted)', margin: 0, fontSize: '0.9rem' }}>Not supported on this browser.</p>
           ) : (
             <button
               type="button"
@@ -227,7 +227,7 @@ export default function ProfilePage() {
               style={{
                 padding: '0.4rem 0.8rem',
                 background: 'var(--color-accent)',
-                color: 'white',
+                color: 'var(--color-on-accent)',
                 border: 'none',
                 borderRadius: '6px',
                 cursor: 'pointer',
@@ -240,7 +240,7 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
             Tetris champion styling
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -255,7 +255,7 @@ export default function ProfilePage() {
             <select
               value={tetrisCrownPiece}
               onChange={(e) => setTetrisCrownPiece(e.target.value)}
-              style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
+              style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}
             >
               <option value="">Default (gold block)</option>
               <option value="I">I-piece (cyan)</option>
@@ -270,13 +270,13 @@ export default function ProfilePage() {
         </div>
 
         <label>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>
             Tetris &quot;Next Piece&quot; preview size
           </div>
           <select
             value={nextPreviewSize}
             onChange={(e) => setNextPreviewSize(Number(e.target.value))}
-            style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}
+            style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}
           >
             <option value={16}>Small</option>
             <option value={22}>Medium (default)</option>
@@ -286,7 +286,7 @@ export default function ProfilePage() {
         </label>
 
         <div>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Developer tools</div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>Developer tools</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <input
               type="checkbox"
@@ -298,13 +298,13 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: '#666' }}>Dome theme</div>
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: '#999' }}>Buy palettes in the Tetris shop, then pick your favorite here - it re-skins the whole Dome.</p>
-          <select value={activeTheme} onChange={(e) => handleThemeChange(e.target.value as ThemeKey)} disabled={themeSaving} style={{ padding: '0.5rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%' }}>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>Dome theme</div>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-muted)' }}>Buy palettes in the Tetris shop, then pick your favorite here - it re-skins the whole Dome.</p>
+          <select value={activeTheme} onChange={(e) => handleThemeChange(e.target.value as ThemeKey)} disabled={themeSaving} style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}>
             <option value="dome">{THEMES.dome.label} (default)</option>
             {ownedThemes.map(({ key, name }) => <option key={key} value={key}>{name} ({THEMES[key].label})</option>)}
           </select>
-          {ownedThemes.length === 0 && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#999' }}>You do not own any purchased themes yet - earn coins in Tetris and open the shop.</p>}
+          {ownedThemes.length === 0 && <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: 'var(--color-muted)' }}>You do not own any purchased themes yet - earn coins in Tetris and open the shop.</p>}
         </div>
 
         {message && <p style={{ color: message.startsWith('Error') ? 'red' : 'green' }}>{message}</p>}
@@ -314,7 +314,7 @@ export default function ProfilePage() {
           style={{
             padding: '0.5rem',
             background: 'var(--color-accent)',
-            color: 'white',
+            color: 'var(--color-on-accent)',
             border: 'none',
             borderRadius: '6px',
             cursor: 'pointer',

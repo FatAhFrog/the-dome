@@ -15,10 +15,10 @@ export default function TimeWidget() {
 
   return (
     <div>
-      <p style={{ fontSize: '1.5rem', fontWeight: 600 }}>
+      <p style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--color-text)' }}>
         {time.toLocaleTimeString()}
       </p>
-      <p style={{ fontSize: '0.85rem', color: '#999' }}>
+      <p style={{ fontSize: '0.85rem', color: 'var(--color-muted)' }}>
         {time.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
       </p>
     </div>

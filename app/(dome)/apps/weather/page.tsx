@@ -116,8 +116,8 @@ export default function WeatherPage() {
 
   return (
     <main style={{ padding: '2rem' }}>
-      <h1 style={{ color: '#EB4600' }}>Weather</h1>
-      <p style={{ margin: '0 0 0.25rem', color: '#666', fontSize: '0.95rem' }}>
+      <h1 style={{ color: 'var(--color-accent)' }}>Weather</h1>
+      <p style={{ margin: '0 0 0.25rem', color: 'var(--color-muted)', fontSize: '0.95rem' }}>
         {place.source === 'gps' && (
           <>Using <strong>your device location</strong> — {place.label}</>
         )}
@@ -129,7 +129,7 @@ export default function WeatherPage() {
         )}
       </p>
       {place.source === 'gps' && (
-        <p style={{ margin: '0 0 0.75rem', color: '#999', fontSize: '0.8rem' }}>
+        <p style={{ margin: '0 0 0.75rem', color: 'var(--color-muted)', fontSize: '0.8rem' }}>
           Coordinates from the browser: {placeCaption(place).detail}
         </p>
       )}
@@ -138,7 +138,7 @@ export default function WeatherPage() {
         <button
           type="button"
           onClick={() => setPickerOpen((o) => !o)}
-          style={{ padding: '0.4rem 0.75rem', background: '#EB4600', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+          style={{ padding: '0.4rem 0.75rem', background: 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
         >
           {pickerOpen ? 'Close' : 'Change location'}
         </button>
@@ -146,7 +146,7 @@ export default function WeatherPage() {
           type="button"
           onClick={handleUseMyLocation}
           disabled={gpsBusy}
-          style={{ padding: '0.4rem 0.75rem', background: 'transparent', color: '#EB4600', border: '1px solid #EB4600', borderRadius: '6px', cursor: gpsBusy ? 'wait' : 'pointer' }}
+          style={{ padding: '0.4rem 0.75rem', background: 'transparent', color: 'var(--color-accent)', border: '1px solid var(--color-accent)', borderRadius: '6px', cursor: gpsBusy ? 'wait' : 'pointer' }}
         >
           {gpsBusy ? 'Locating…' : 'Use my location'}
         </button>
@@ -155,7 +155,7 @@ export default function WeatherPage() {
             type="button"
             onClick={() => persist({ ...place, persisted: true })}
             disabled={saving}
-            style={{ padding: '0.4rem 0.75rem', background: 'transparent', color: '#1A1A1A', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer' }}
+            style={{ padding: '0.4rem 0.75rem', background: 'transparent', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: '6px', cursor: 'pointer' }}
           >
             {saving ? 'Saving…' : 'Save this location'}
           </button>
@@ -163,15 +163,15 @@ export default function WeatherPage() {
       </div>
 
       {pickerOpen && (
-        <div style={{ marginBottom: '1.5rem', maxWidth: '420px', border: '1px solid #eee', borderRadius: '8px', padding: '0.75rem' }}>
+        <div style={{ marginBottom: '1.5rem', maxWidth: '420px', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem', background: 'var(--color-panel-background)' }}>
           <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.4rem' }}>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="City or place"
-              style={{ flex: 1, padding: '0.4rem 0.5rem', border: '1px solid #ccc', borderRadius: '6px' }}
+              style={{ flex: 1, padding: '0.4rem 0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px' }}
             />
-            <button type="submit" disabled={searching} style={{ padding: '0.4rem 0.75rem', background: '#EB4600', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+            <button type="submit" disabled={searching} style={{ padding: '0.4rem 0.75rem', background: 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
               {searching ? '…' : 'Search'}
             </button>
           </form>
@@ -183,7 +183,7 @@ export default function WeatherPage() {
                     type="button"
                     onClick={() => persist({ ...hit, persisted: true, source: 'saved' })}
                     disabled={saving}
-                    style={{ width: '100%', textAlign: 'left', padding: '0.45rem 0.25rem', background: 'transparent', border: 'none', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                    style={{ width: '100%', textAlign: 'left', padding: '0.45rem 0.25rem', background: 'transparent', border: 'none', borderBottom: '1px solid var(--color-border)', cursor: 'pointer', color: 'var(--color-text)' }}
                   >
                     {hit.label}
                   </button>
@@ -212,7 +212,7 @@ export default function WeatherPage() {
           <div style={{ fontSize: '2.2rem', fontWeight: 700 }}>{forecast.current.temperature}°F</div>
           <div style={{ opacity: 0.9 }}>{weatherDescriptions[forecast.current.weathercode] || 'Unknown conditions'}</div>
         </div>
-      </div> : <div style={{ background: '#f0f0f0', borderRadius: '12px', height: '84px', maxWidth: '320px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: '0.85rem' }}>
+      </div> : <div style={{ background: 'var(--color-panel-background)', borderRadius: '12px', height: '84px', maxWidth: '320px', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-muted)', fontSize: '0.85rem' }}>
         {loading ? 'Loading conditions...' : 'Weather unavailable'}
       </div>}
 
@@ -241,7 +241,7 @@ export default function WeatherPage() {
             <div style={{ fontSize: '0.8rem', opacity: 0.85 }}>{day.min}° low</div>
           </div>
         )) : Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} style={{ background: '#f5f5f5', borderRadius: '8px', padding: '0.75rem', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: '0.8rem' }}>
+          <div key={i} style={{ background: 'var(--color-panel-background)', borderRadius: '8px', padding: '0.75rem', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-muted)', fontSize: '0.8rem' }}>
             {loading ? '...' : 'N/A'}
           </div>
         ))}

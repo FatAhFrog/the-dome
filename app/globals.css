@@ -16,6 +16,7 @@
   --color-accent: #eb4600;
   --color-accent-secondary: #ffae00;
   --color-on-accent: #ffffff;
+  --color-muted: #666666;
 
   /* The 7 tetromino colors, also theme-driven. Canvas can't read var()
      directly — see lib/themes.ts:getPieceColorsFromDOM(). */
@@ -72,6 +73,13 @@ body {
   background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-sans);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+select,
+textarea {
+  background-color: var(--color-panel-background);
+  color: var(--color-text);
 }
 
 .side-panel {
