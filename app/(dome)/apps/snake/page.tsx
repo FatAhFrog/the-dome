@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useDomeSession } from '@/components/DomeSession'
 import { readCssVar, THEME_CHANGE_EVENT } from '@/lib/themes'
+import GameCanvasFrame from '@/components/GameCanvasFrame'
 
 const GRID_SIZE = 20
 const CELL_SIZE = 20
@@ -58,7 +59,7 @@ export default function SnakePage() {
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return false
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: false })
     if (!ctx) return false
 
     ctx.fillStyle = readCssVar('--color-panel-background', '#fafafa')
@@ -193,12 +194,12 @@ export default function SnakePage() {
       <h1 style={{ color: 'var(--color-accent)', marginBottom: '1rem' }}>Snake</h1>
       <p style={{ marginBottom: '1rem' }}>Score: {score}</p>
 
-      <div style={{ position: 'relative', border: '2px solid var(--color-panel-text)', borderRadius: '8px', overflow: 'hidden', lineHeight: 0 }}>
+      <GameCanvasFrame>
         <canvas
           ref={canvasRef}
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
-          style={{ display: 'block', background: 'var(--color-panel-background)', colorScheme: 'light' }}
+          style={{ display: 'block', background: 'var(--color-panel-background)' }}
         />
         {started && !gameOver && !paused && (
           <button
@@ -230,7 +231,6 @@ export default function SnakePage() {
               justifyContent: 'center',
               background: 'color-mix(in srgb, var(--color-panel-background) 92%, transparent)',
               color: 'var(--color-panel-text)',
-              borderRadius: '8px',
             }}
           >
             {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
@@ -250,7 +250,7 @@ export default function SnakePage() {
             </button>
           </div>
         )}
-      </div>
+      </GameCanvasFrame>
 
       <p style={{ marginTop: '1rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Use arrow keys to move · P pause</p>
     </main>

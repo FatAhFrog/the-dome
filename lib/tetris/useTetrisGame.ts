@@ -202,7 +202,7 @@ export function useTetrisGame({
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return false
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d', { alpha: false })
     if (!ctx) return false
 
     ctx.fillStyle = boardBgRef.current

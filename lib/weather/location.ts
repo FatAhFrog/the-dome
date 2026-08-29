@@ -43,17 +43,6 @@ export function formatCoords(lat: number, lon: number) {
 export async function reverseGeocode(lat: number, lon: number): Promise<string> {
   try {
     const res = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=en&format=json`
-    )
-    const data = await res.json()
-    const r = (data.results || [])[0] as { name?: string; admin1?: string; country?: string } | undefined
-    const label = [r?.name, r?.admin1, r?.country].filter(Boolean).join(', ')
-    if (label) return label
-  } catch {
-    /* try backup */
-  }
-  try {
-    const res = await fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
     )
     const d = await res.json()
