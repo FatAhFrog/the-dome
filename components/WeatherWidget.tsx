@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import WeatherIcon from './WeatherIcon'
 import { useDomeSession } from '@/components/DomeSession'
-import { placeFromProfile, useWeatherPlace } from '@/lib/weather/location'
+import { placeCaption, placeFromProfile, useWeatherPlace } from '@/lib/weather/location'
 
 type WeatherData = {
   temperature: number
@@ -71,7 +71,7 @@ export default function WeatherWidget() {
         <p style={{ fontSize: '0.85rem', color: '#666', margin: 0 }}>
           {weatherDescriptions[weather.weathercode] || 'Unknown conditions'}
         </p>
-        <p style={{ fontSize: '0.75rem', color: '#999', margin: '0.2rem 0 0' }}>{place.label}</p>
+        <p style={{ fontSize: '0.75rem', color: '#999', margin: '0.2rem 0 0' }}>{placeCaption(place).headline}</p>
         <Link href="/apps/weather" style={{ fontSize: '0.75rem', color: '#EB4600', textDecoration: 'none' }}>
           Change location
         </Link>

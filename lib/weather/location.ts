@@ -15,6 +15,8 @@ export type WeatherPlace = {
   lon: number
   label: string
   persisted: boolean
+  /** Where the coords came from — GPS is the browser, not Springdale or a search pick. */
+  source: 'saved' | 'gps' | 'default'
 }
 
 export function placeFromProfile(profile: {
@@ -28,7 +30,44 @@ export function placeFromProfile(profile: {
     lon: profile.weather_lon,
     label: profile.weather_label?.trim() || 'Saved location',
     persisted: true,
+    source: 'saved',
   }
+}
+
+export function formatCoords(lat: number, lon: number) {
+  const ns = lat >= 0 ? 'N' : 'S'
+  const ew = lon >= 0 ? 'E' : 'W'
+  return `${Math.abs(lat).toFixed(2)}°${ns}, ${Math.abs(lon).toFixed(2)}°${ew}`
+}
+
+export async function reverseGeocode(lat: number, lon: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&language=en&format=json`
+    )
+    const data = await res.json()
+    const r = (data.results || [])[0] as { name?: string; admin1?: string; country?: string } | undefined
+    const label = [r?.name, r?.admin1, r?.country].filter(Boolean).join(', ')
+    if (label) return label
+  } catch {
+    /* try backup */
+  }
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`
+    )
+    const d = await res.json()
+    const label = [d.city || d.locality, d.principalSubdivision, d.countryName].filter(Boolean).join(', ')
+    if (label) return label
+  } catch {
+    /* use coords */
+  }
+  return formatCoords(lat, lon)
+}
+
+export async function placeFromDeviceGps(coords: { lat: number; lon: number }): Promise<WeatherPlace> {
+  const label = await reverseGeocode(coords.lat, coords.lon)
+  return { lat: coords.lat, lon: coords.lon, label, persisted: false, source: 'gps' }
 }
 
 /** GPS with a hard 3s timeout. Never hangs Firefox. Null on deny/timeout/unsupported. */
@@ -77,8 +116,24 @@ export async function searchPlaces(query: string): Promise<GeocodeHit[]> {
  * Saved profile place wins. Otherwise Springdale immediately, then GPS may
  * upgrade the unsaved view to "Current location" within 3s.
  */
+export function placeCaption(place: WeatherPlace) {
+  if (place.source === 'gps') {
+    return {
+      headline: `Your device — ${place.label}`,
+      detail: formatCoords(place.lat, place.lon),
+    }
+  }
+  if (place.source === 'default') {
+    return {
+      headline: `Default — ${place.label}`,
+      detail: 'Not your device. Change location or use my location.',
+    }
+  }
+  return { headline: `Saved — ${place.label}`, detail: null as string | null }
+}
+
 export function useWeatherPlace(saved: WeatherPlace | null) {
-  const [place, setPlace] = useState<WeatherPlace>(saved ?? { ...SPRINGDALE, persisted: false })
+  const [place, setPlace] = useState<WeatherPlace>(saved ?? { ...SPRINGDALE, persisted: false, source: 'default' })
 
   const savedLat = saved?.lat
   const savedLon = saved?.lon
@@ -91,14 +146,17 @@ export function useWeatherPlace(saved: WeatherPlace | null) {
         lon: savedLon,
         label: savedLabel || 'Saved location',
         persisted: true,
+        source: 'saved',
       })
       return
     }
-    setPlace({ ...SPRINGDALE, persisted: false })
+    setPlace({ ...SPRINGDALE, persisted: false, source: 'default' })
     let cancelled = false
-    requestBrowserLocation().then((gps) => {
+    requestBrowserLocation().then(async (gps) => {
       if (cancelled || !gps) return
-      setPlace({ lat: gps.lat, lon: gps.lon, label: 'Current location', persisted: false })
+      const next = await placeFromDeviceGps(gps)
+      if (cancelled) return
+      setPlace(next)
     })
     return () => {
       cancelled = true
