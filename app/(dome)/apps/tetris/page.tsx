@@ -8,6 +8,7 @@ import { ThemeKey, THEME_PRICE } from '@/lib/themes'
 import { CELL, COLS, ROWS } from '@/lib/tetris/shapes'
 import { MAX_SPEED_LEVEL, UPGRADE_PRICES, speedLevelPrice, type TetrisUpgrades } from '@/lib/tetris/shop'
 import { useTetrisGame } from '@/lib/tetris/useTetrisGame'
+import GameCanvasFrame from '@/components/GameCanvasFrame'
 
 const ShopPanel = dynamic(() => import('@/components/ShopPanel'), { ssr: false })
 const TetrisMetricsPanel = dynamic(() => import('@/components/TetrisMetricsPanel'), { ssr: false })
@@ -169,12 +170,12 @@ export default function TetrisPage() {
             <p>Level: {level}</p>
           </div>
 
-          <div style={{ position: 'relative', border: '2px solid var(--color-panel-text)', borderRadius: '8px', overflow: 'hidden', lineHeight: 0 }}>
+          <GameCanvasFrame>
           <canvas
             ref={canvasRef}
             width={COLS * CELL}
             height={ROWS * CELL}
-            style={{ display: 'block', background: 'var(--color-panel-background)', colorScheme: 'light' }}
+            style={{ display: 'block', background: 'var(--color-panel-background)' }}
           />
           {(!started || gameOver || paused) && (
             <div
@@ -187,7 +188,6 @@ export default function TetrisPage() {
                 justifyContent: 'center',
                 background: 'color-mix(in srgb, var(--color-panel-background) 92%, transparent)',
                 color: 'var(--color-panel-text)',
-                borderRadius: '8px',
               }}
             >
               {paused && !gameOver && <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Paused</p>}
@@ -207,7 +207,7 @@ export default function TetrisPage() {
               </button>
             </div>
           )}
-          </div>
+          </GameCanvasFrame>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

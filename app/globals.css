@@ -75,6 +75,11 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Firefox paints <canvas> black under color-scheme: dark. Games set their own fills. */
+canvas {
+  color-scheme: only light;
+}
+
 input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
 select,
 textarea {
