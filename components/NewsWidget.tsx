@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { useDomeSession } from '@/components/DomeSession'
 
 type NewsItem = {
   title: string
@@ -10,24 +10,13 @@ type NewsItem = {
 }
 
 export default function NewsWidget() {
+  const { profile } = useDomeSession()
   const [items, setItems] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const category = profile?.news_category || 'general'
 
   useEffect(() => {
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      let category = 'general'
-
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('news_category')
-          .eq('id', user.id)
-          .single()
-        category = profile?.news_category || 'general'
-      }
-
       const res = await fetch(`/api/news?category=${category}`)
       const data = await res.json()
       setItems(data.items || [])
@@ -35,7 +24,7 @@ export default function NewsWidget() {
     }
 
     load()
-  }, [])
+  }, [category])
 
     if (loading) return <p style={{ color: '#999' }}>Loading headlines — may take a few seconds...</p>
     if (items.length === 0) return <p style={{ color: '#999' }}>No headlines available.</p>

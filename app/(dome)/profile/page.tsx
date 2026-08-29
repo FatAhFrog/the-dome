@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { subscribeToPush, getPushPermissionState } from '@/lib/push'
 import { THEMES, ThemeKey, applyThemeVars, isThemeKey } from '@/lib/themes'
+import { useDomeSession } from '@/components/DomeSession'
 
 const CATEGORIES = [
   { value: 'general', label: 'General News' },
@@ -29,11 +30,11 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const { user } = useDomeSession()
   const supabase = createClient()
 
   useEffect(() => {
     const loadProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       const { data: profile } = await supabase
@@ -58,13 +59,12 @@ export default function ProfilePage() {
     }
 
     loadProfile()
-  }, [])
+  }, [user, supabase])
 
   const handleThemeChange = async (key: ThemeKey) => {
     setThemeSaving(true)
     setActiveTheme(key)
     applyThemeVars(key)
-    const { data: { user } } = await supabase.auth.getUser()
     if (user) await supabase.from('profiles').upsert({ id: user.id, active_theme: key })
     setThemeSaving(false)
   }
@@ -78,7 +78,6 @@ export default function ProfilePage() {
     setSaving(true)
     setMessage(null)
 
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { error } = await supabase
@@ -104,7 +103,6 @@ export default function ProfilePage() {
 
     setUploading(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const fileExt = file.name.split('.').pop()

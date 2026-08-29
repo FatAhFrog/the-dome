@@ -2,22 +2,10 @@
 
 import { useState } from 'react'
 import { PURCHASABLE_THEME_KEYS, THEMES, THEME_PRICE, ThemeKey } from '@/lib/themes'
+import { MAX_SPEED_LEVEL, UPGRADE_PRICES, speedLevelPrice, type TetrisUpgrades } from '@/lib/tetris/shop'
 
-export type TetrisUpgrades = {
-  lowSpawn: boolean
-  speedLevel: number
-  ghost: boolean
-  hold: boolean
-}
-
-export const UPGRADE_PRICES = {
-  lowSpawn: 300,
-  ghost: 900,
-  hold: 500,
-}
-
-export const MAX_SPEED_LEVEL = 10
-export const speedLevelPrice = (currentLevel: number) => 150 * (currentLevel + 1)
+export type { TetrisUpgrades } from '@/lib/tetris/shop'
+export { MAX_SPEED_LEVEL, UPGRADE_PRICES, speedLevelPrice } from '@/lib/tetris/shop'
 
 type Props = {
   open: boolean

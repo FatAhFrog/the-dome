@@ -1,24 +1,16 @@
 'use client'
 
 import { useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useDomeSession } from '@/components/DomeSession'
 import { applyThemeVars } from '@/lib/themes'
 
+/** Applies the layout-owned theme. Does not fetch auth — `useDomeSession` is the source. */
 export default function ThemeLoader() {
+  const { profile } = useDomeSession()
+
   useEffect(() => {
-    const supabase = createClient()
-    let cancelled = false
-
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || cancelled) return
-      const { data: profile } = await supabase.from('profiles').select('active_theme').eq('id', user.id).single()
-      if (!cancelled) applyThemeVars(profile?.active_theme)
-    }
-
-    load()
-    return () => { cancelled = true }
-  }, [])
+    applyThemeVars(profile?.active_theme)
+  }, [profile?.active_theme])
 
   return null
 }

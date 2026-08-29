@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useDomeSession } from '@/components/DomeSession'
 
 type NewsItem = {
   title: string
@@ -17,26 +17,11 @@ const CATEGORIES = [
 ]
 
 export default function NewsPage() {
+  const { profile } = useDomeSession()
   const [items, setItems] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [category, setCategory] = useState('general')
-  const [newsEnabled, setNewsEnabled] = useState(true)
-  const supabase = createClient()
-
-  useEffect(() => {
-    const loadDefault = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('news_category')
-          .eq('id', user.id)
-          .single()
-        if (profile?.news_category) setCategory(profile.news_category)
-      }
-    }
-    loadDefault()
-  }, [])
+  const [category, setCategory] = useState(profile?.news_category || 'general')
+  const newsEnabled = profile?.news_enabled ?? true
 
   useEffect(() => {
     setLoading(true)
@@ -48,20 +33,6 @@ export default function NewsPage() {
       })
       .catch(() => setLoading(false))
   }, [category])
-
-  useEffect(() => {
-    const checkEnabled = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('news_enabled')
-        .eq('id', user.id)
-        .single()
-      setNewsEnabled(profile?.news_enabled ?? true)
-    }
-    checkEnabled()
-  }, [])
 
   if (!newsEnabled) {
     return (

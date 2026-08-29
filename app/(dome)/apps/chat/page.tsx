@@ -1,8 +1,9 @@
- 'use client'
+'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import TetrisChampionBadge from '@/components/TetrisChampionBadge'
+import { useDomeSession } from '@/components/DomeSession'
 
 type Message = {
   id: string
@@ -13,6 +14,7 @@ type Message = {
 }
 
 export default function ChatPage() {
+  const { user } = useDomeSession()
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [roomId, setRoomId] = useState<string | null>(null)
@@ -117,7 +119,6 @@ export default function ChatPage() {
     e.preventDefault()
     if (!newMessage.trim() || !roomId) return
 
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { error } = await supabase.from('messages').insert({

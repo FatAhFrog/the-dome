@@ -120,6 +120,12 @@ export function isThemeKey(value: string | null | undefined): value is ThemeKey 
 // the resolved colors via getPieceColorsFromDOM()/readCssVar().
 export const THEME_CHANGE_EVENT = 'dome-theme-change'
 
+/** `:root` custom properties for SSR so first HTML already has the active theme. */
+export function themeCssText(themeKey: string | null | undefined): string {
+  const theme = THEMES[isThemeKey(themeKey) ? themeKey : 'dome']
+  return `:root{--color-background:${theme.background};--color-panel-background:${theme.panelBackground};--color-text:${theme.text};--color-panel-text:${theme.panelText};--color-border:${theme.border};--color-accent:${theme.accent};--color-accent-secondary:${theme.accentSecondary};--color-on-accent:${theme.onAccent};--piece-i:${theme.pieces.I};--piece-o:${theme.pieces.O};--piece-t:${theme.pieces.T};--piece-s:${theme.pieces.S};--piece-z:${theme.pieces.Z};--piece-j:${theme.pieces.J};--piece-l:${theme.pieces.L}}`
+}
+
 export function applyThemeVars(themeKey: string | null | undefined) {
   if (typeof document === 'undefined') return
   const theme = THEMES[isThemeKey(themeKey) ? themeKey : 'dome']
