@@ -56,9 +56,9 @@ export default function SnakePage() {
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) return false
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return false
 
     ctx.fillStyle = '#fafafa'
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
@@ -71,6 +71,7 @@ export default function SnakePage() {
       ctx.fillStyle = i === 0 ? '#EB4600' : '#1A1A1A'
       ctx.fillRect(s.x * CELL_SIZE, s.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
     })
+    return true
   }, [])
 
   const step = useCallback(() => {
@@ -166,9 +167,8 @@ export default function SnakePage() {
         }
       }
 
-      if (dirtyRef.current) {
+      if (dirtyRef.current && draw()) {
         dirtyRef.current = false
-        draw()
       }
 
       rafRef.current = requestAnimationFrame(loop)

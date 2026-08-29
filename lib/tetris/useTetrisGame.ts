@@ -201,9 +201,9 @@ export function useTetrisGame({
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) return false
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return false
 
     ctx.fillStyle = boardBgRef.current
     ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL)
@@ -254,6 +254,7 @@ export function useTetrisGame({
     if (upgradesRef.current.hold) {
       drawMiniPiece(holdCanvasRef.current, holdTypeRef.current, nextCellSizeRef.current)
     }
+    return true
   }, [canvasRef, holdCanvasRef, nextCanvasRef])
 
   const lockPiece = useCallback((piece: ActivePiece) => {
@@ -473,9 +474,8 @@ export function useTetrisGame({
       }
 
       syncMetrics()
-      if (dirtyRef.current) {
+      if (dirtyRef.current && draw()) {
         dirtyRef.current = false
-        draw()
       }
       rafRef.current = requestAnimationFrame(loop)
     }
