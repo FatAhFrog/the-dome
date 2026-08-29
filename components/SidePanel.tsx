@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useDomeSession } from '@/components/DomeSession'
 
 const navItems = [
   { label: 'Hub', href: '/hub' },
@@ -19,29 +20,25 @@ const navItems = [
 export default function SidePanel() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClient()
+  const { user, profile } = useDomeSession()
+  const [supabase] = useState(() => createClient())
 
-  const [newsEnabled, setNewsEnabled] = useState(true)
+  const newsEnabled = profile?.news_enabled ?? true
   const [unreadCount, setUnreadCount] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
 
-  const currentUserId = useRef<string | null>(null)
+  const currentUserId = useRef<string | null>(user?.id ?? null)
   const pathnameRef = useRef(pathname)
-  pathnameRef.current = pathname
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
 
   useEffect(() => {
-    const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      currentUserId.current = user.id
+    currentUserId.current = user?.id ?? null
+    pathnameRef.current = pathname
+  }, [user?.id, pathname])
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('news_enabled')
-        .eq('id', user.id)
-        .single()
-      setNewsEnabled(profile?.news_enabled ?? true)
+  useEffect(() => {
+    const init = async () => {
+      if (!user) return
 
       const { data: room } = await supabase
         .from('rooms')
@@ -96,14 +93,11 @@ export default function SidePanel() {
         channelRef.current = null
       }
     }
-  }, [])
+  }, [user, supabase])
 
-  // Clear unread count whenever the user navigates into Chat
-  useEffect(() => {
-    if (pathname === '/apps/chat') {
-      setUnreadCount(0)
-    }
-  }, [pathname])
+  if (pathname === '/apps/chat' && unreadCount > 0) {
+    setUnreadCount(0)
+  }
 
   return (
     <>

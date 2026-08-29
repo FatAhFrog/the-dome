@@ -4,25 +4,18 @@ import WeatherWidget from '@/components/WeatherWidget'
 import NewsWidget from '@/components/NewsWidget'
 import QuickChatWidget from '@/components/QuickChatWidget'
 import { createClient } from '@/lib/supabase/server'
+import { getDomeSession } from '@/lib/dome-session'
 
 export default async function HubPage() {
+  const { profile } = await getDomeSession()
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
   const { data: announcements } = await supabase
     .from('announcements')
     .select('title, body, created_at')
     .order('created_at', { ascending: false })
     .limit(3)
 
-  let newsEnabled = true
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('news_enabled')
-      .eq('id', user.id)
-      .single()
-    newsEnabled = profile?.news_enabled ?? true
-  }
+  const newsEnabled = profile?.news_enabled ?? true
 
   return (
     <main style={{ padding: '2rem' }}>

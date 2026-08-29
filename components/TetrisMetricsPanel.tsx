@@ -1,12 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import type { TetrisMetricsSource } from '@/lib/tetris/useTetrisGame'
 
-// One sample per second while a game is running. score/lines/moves are
-// PER-SECOND deltas (not running totals) — how much each changed since the
-// previous sample. speed is the current gravity rate in drops/minute
-// (60000 / dropIntervalMs), so it reads as "higher = faster" like the other
-// three instead of an inverted millisecond countdown.
 export type TetrisMetricSample = {
   t: number
   score: number
@@ -68,7 +64,6 @@ function MetricChart({
         </span>
       </div>
       <svg width={CHART_W} height={CHART_H} style={{ display: 'block', overflow: 'visible' }}>
-        {/* baseline + max gridline */}
         <line x1={PAD_L} y1={8 + plotH} x2={CHART_W - 4} y2={8 + plotH} stroke="var(--color-border)" strokeWidth={1} />
         <line x1={PAD_L} y1={8} x2={CHART_W - 4} y2={8} stroke="var(--color-border)" strokeWidth={1} strokeDasharray="2,3" />
         <text x={0} y={12} fontSize={9} fill="var(--color-panel-text)" opacity={0.5}>{maxV.toFixed(0)}</text>
@@ -85,8 +80,37 @@ function MetricChart({
   )
 }
 
-export default function TetrisMetricsPanel({ samples }: { samples: TetrisMetricSample[] }) {
+/** Owns the 1s sampler so Tetris page state does not update every second. */
+export default function TetrisMetricsPanel({ source }: { source: RefObject<TetrisMetricsSource> }) {
+  const [samples, setSamples] = useState<TetrisMetricSample[]>([])
   const [windowKey, setWindowKey] = useState('1m')
+  const prevSnapshotRef = useRef({ score: 0, lines: 0, moves: 0 })
+  const lastStartRef = useRef(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const s = source.current
+      if (!s) return
+      if (s.gameStart !== lastStartRef.current) {
+        lastStartRef.current = s.gameStart
+        prevSnapshotRef.current = { score: 0, lines: 0, moves: 0 }
+        setSamples([])
+      }
+      if (!s.started || s.gameOver || s.gameStart === 0) return
+      const t = (Date.now() - s.gameStart) / 1000
+      const prev = prevSnapshotRef.current
+      const sample: TetrisMetricSample = {
+        t,
+        score: s.score - prev.score,
+        lines: s.lines - prev.lines,
+        moves: s.moves - prev.moves,
+        speed: s.speedMs > 0 ? 60000 / s.speedMs : 0,
+      }
+      prevSnapshotRef.current = { score: s.score, lines: s.lines, moves: s.moves }
+      setSamples((arr) => (arr.length >= 7200 ? [...arr.slice(1), sample] : [...arr, sample]))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [source])
 
   const windowed = useMemo(() => {
     if (samples.length === 0) return []
