@@ -5,6 +5,8 @@ import WeatherIcon from '@/components/WeatherIcon'
 import { useDomeSession } from '@/components/DomeSession'
 import { createClient } from '@/lib/supabase/client'
 import {
+  placeCaption,
+  placeFromDeviceGps,
   placeFromProfile,
   requestBrowserLocation,
   searchPlaces,
@@ -86,7 +88,7 @@ export default function WeatherPage() {
       .eq('id', user.id)
     setSaving(false)
     if (error) return
-    const persisted = { ...next, persisted: true }
+    const persisted = { ...next, persisted: true, source: 'saved' as const }
     setSaved(persisted)
     setPlace(persisted)
     setPickerOpen(false)
@@ -109,15 +111,29 @@ export default function WeatherPage() {
     const gps = await requestBrowserLocation()
     setGpsBusy(false)
     if (!gps) return
-    setPlace({ lat: gps.lat, lon: gps.lon, label: 'Current location', persisted: false })
+    setPlace(await placeFromDeviceGps(gps))
   }
 
   return (
     <main style={{ padding: '2rem' }}>
       <h1 style={{ color: '#EB4600' }}>Weather</h1>
-      <p style={{ margin: '0 0 0.75rem', color: '#666', fontSize: '0.95rem' }}>
-        Showing weather for <strong>{place.label}</strong>
+      <p style={{ margin: '0 0 0.25rem', color: '#666', fontSize: '0.95rem' }}>
+        {place.source === 'gps' && (
+          <>Using <strong>your device location</strong> — {place.label}</>
+        )}
+        {place.source === 'default' && (
+          <>Showing the <strong>default</strong> — {place.label} (not your device)</>
+        )}
+        {place.source === 'saved' && (
+          <>Showing weather for <strong>{place.label}</strong> (saved)</>
+        )}
       </p>
+      {place.source === 'gps' && (
+        <p style={{ margin: '0 0 0.75rem', color: '#999', fontSize: '0.8rem' }}>
+          Coordinates from the browser: {placeCaption(place).detail}
+        </p>
+      )}
+      {place.source !== 'gps' && <p style={{ margin: '0 0 0.75rem' }} />}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem' }}>
         <button
           type="button"
@@ -134,7 +150,7 @@ export default function WeatherPage() {
         >
           {gpsBusy ? 'Locating…' : 'Use my location'}
         </button>
-        {!place.persisted && place.label === 'Current location' && (
+        {!place.persisted && place.source === 'gps' && (
           <button
             type="button"
             onClick={() => persist({ ...place, persisted: true })}
@@ -165,7 +181,7 @@ export default function WeatherPage() {
                 <li key={`${hit.lat},${hit.lon},${hit.label}`}>
                   <button
                     type="button"
-                    onClick={() => persist({ ...hit, persisted: true })}
+                    onClick={() => persist({ ...hit, persisted: true, source: 'saved' })}
                     disabled={saving}
                     style={{ width: '100%', textAlign: 'left', padding: '0.45rem 0.25rem', background: 'transparent', border: 'none', borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
                   >

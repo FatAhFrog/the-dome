@@ -184,12 +184,12 @@ export default function SnakePage() {
       <h1 style={{ color: '#EB4600', marginBottom: '1rem' }}>Snake</h1>
       <p style={{ marginBottom: '1rem' }}>Score: {score}</p>
 
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', border: '2px solid #1A1A1A', borderRadius: '8px', overflow: 'hidden', lineHeight: 0 }}>
         <canvas
           ref={canvasRef}
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
-          style={{ border: '2px solid #1A1A1A', borderRadius: '8px' }}
+          style={{ display: 'block', background: '#fafafa', colorScheme: 'light' }}
         />
         {started && !gameOver && !paused && (
           <button

@@ -169,12 +169,12 @@ export default function TetrisPage() {
             <p>Level: {level}</p>
           </div>
 
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', border: '2px solid var(--color-panel-text)', borderRadius: '8px', overflow: 'hidden', lineHeight: 0 }}>
           <canvas
             ref={canvasRef}
             width={COLS * CELL}
             height={ROWS * CELL}
-            style={{ border: '2px solid var(--color-panel-text)', borderRadius: '8px' }}
+            style={{ display: 'block', background: 'var(--color-panel-background)', colorScheme: 'light' }}
           />
           {(!started || gameOver || paused) && (
             <div
