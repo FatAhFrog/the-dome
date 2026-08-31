@@ -5,34 +5,38 @@ import { createClient } from '@/lib/supabase/client'
 import { useDomeSession } from '@/components/DomeSession'
 import { readCssVar, THEME_CHANGE_EVENT } from '@/lib/themes'
 import GameCanvasFrame from '@/components/GameCanvasFrame'
+import SnakeShopPanel from '@/components/SnakeShopPanel'
+import { SNAKE_THEMES, SNAKE_UPGRADE_PRICES, SnakeThemeKey, SnakeUpgrades } from '@/lib/snake/shop'
 
 const GRID_SIZE = 20
 const CELL_SIZE = 20
 const CANVAS_SIZE = GRID_SIZE * CELL_SIZE
 /** Snap period — one integer cell per beat. Not a lerp / dt tween. */
 const STEP_MS = 120
-const GUARD_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'p', 'P'])
+const GUARD_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'p', 'P', ' '])
 
 type Point = { x: number; y: number }
 
-const randomFood = (snake: Point[]): Point => {
+type Food = Point & { isCoin: boolean }
+
+const randomFood = (snake: Point[], foods: Food[]): Food => {
   let food: Point
   do {
     food = {
       x: Math.floor(Math.random() * GRID_SIZE),
       y: Math.floor(Math.random() * GRID_SIZE),
     }
-  } while (snake.some((s) => s.x === food.x && s.y === food.y))
-  return food
+  } while (snake.some((s) => s.x === food.x && s.y === food.y) || foods.some((f) => f.x === food.x && f.y === food.y))
+  return { ...food, isCoin: Math.random() < 0.12 }
 }
 
 export default function SnakePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { user } = useDomeSession()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const snakeRef = useRef<Point[]>([{ x: 10, y: 10 }])
-  const foodRef = useRef<Point>({ x: 15, y: 10 })
+  const foodRef = useRef<Food[]>([{ x: 15, y: 10, isCoin: false }])
   const directionRef = useRef<Point>({ x: 1, y: 0 })
   const lastAppliedDirection = useRef<Point>({ x: 1, y: 0 })
   const dirtyRef = useRef(true)
@@ -44,6 +48,20 @@ export default function SnakePage() {
   const [gameOver, setGameOver] = useState(false)
   const [started, setStarted] = useState(false)
   const [paused, setPaused] = useState(false)
+  const [coins, setCoins] = useState(0)
+  const [upgrades, setUpgrades] = useState<SnakeUpgrades>({ extraApples: 0, slowDown: false, shield: false })
+  const [ownedThemeKeys, setOwnedThemeKeys] = useState<string[]>([])
+  const [activeThemeKey, setActiveThemeKey] = useState<SnakeThemeKey | null>(null)
+  const [shopOpen, setShopOpen] = useState(false)
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [slowCharge, setSlowCharge] = useState(5)
+  const [slowActive, setSlowActive] = useState(false)
+  const [shieldAvailable, setShieldAvailable] = useState(false)
+  const upgradesRef = useRef(upgrades)
+  const slowChargeRef = useRef(5)
+  const slowHeldRef = useRef(false)
+  const shieldRef = useRef(false)
   const submittedRef = useRef(false)
 
   const startedRef = useRef(started)
@@ -56,6 +74,30 @@ export default function SnakePage() {
     pausedRef.current = paused
   }, [started, gameOver, paused])
 
+  useEffect(() => {
+    upgradesRef.current = upgrades
+    shieldRef.current = shieldAvailable
+  }, [upgrades, shieldAvailable])
+
+  useEffect(() => {
+    if (!user) return
+    const loadSnakeShop = async () => {
+      const { data: profile } = await supabase.from('profiles').select('coins, snake_extra_apples, snake_slow_down, snake_shield, snake_active_theme').eq('id', user.id).single()
+      setCoins(profile?.coins ?? 0)
+      setUpgrades({ extraApples: profile?.snake_extra_apples ?? 0, slowDown: profile?.snake_slow_down ?? false, shield: profile?.snake_shield ?? false })
+      setShieldAvailable(profile?.snake_shield ?? false)
+      setActiveThemeKey(profile?.snake_active_theme && profile.snake_active_theme in SNAKE_THEMES ? profile.snake_active_theme as SnakeThemeKey : null)
+      const { data: purchases } = await supabase.from('snake_theme_purchases').select('theme_key').eq('user_id', user.id)
+      setOwnedThemeKeys((purchases || []).map((purchase) => purchase.theme_key))
+    }
+    loadSnakeShop()
+  }, [supabase, user])
+
+  const earnCoins = useCallback(async (amount: number) => {
+    const { data, error } = await supabase.rpc('earn_coins', { p_amount: amount })
+    if (!error && typeof data === 'number') setCoins(data)
+  }, [supabase])
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return false
@@ -65,16 +107,18 @@ export default function SnakePage() {
     ctx.fillStyle = readCssVar('--color-panel-background', '#fafafa')
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
 
-    const food = foodRef.current
-    ctx.fillStyle = readCssVar('--color-accent-secondary', '#FFAE00')
-    ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
+    const colors = activeThemeKey ? SNAKE_THEMES[activeThemeKey].colors : [readCssVar('--color-accent-secondary', '#FFAE00'), readCssVar('--color-accent', '#EB4600')]
+    foodRef.current.forEach((food, index) => {
+      ctx.fillStyle = food.isCoin ? '#FFD23F' : colors[index % colors.length]
+      ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
+    })
 
     snakeRef.current.forEach((s, i) => {
-      ctx.fillStyle = i === 0 ? readCssVar('--color-accent', '#EB4600') : readCssVar('--color-text', '#1A1A1A')
+      ctx.fillStyle = activeThemeKey ? SNAKE_THEMES[activeThemeKey].colors[i === 0 ? 3 : 4] : i === 0 ? readCssVar('--color-accent', '#EB4600') : readCssVar('--color-text', '#1A1A1A')
       ctx.fillRect(s.x * CELL_SIZE, s.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
     })
     return true
-  }, [])
+  }, [activeThemeKey])
 
   const step = useCallback(() => {
     const moveDirection = directionRef.current
@@ -90,28 +134,46 @@ export default function SnakePage() {
       newHead.y >= GRID_SIZE ||
       prevSnake.some((s) => s.x === newHead.x && s.y === newHead.y)
     ) {
-      setGameOver(true)
+      if (shieldRef.current) {
+        shieldRef.current = false
+        setShieldAvailable(false)
+        snakeRef.current = [{ x: 10, y: 10 }]
+        directionRef.current = { x: 1, y: 0 }
+        lastAppliedDirection.current = { x: 1, y: 0 }
+        dirtyRef.current = true
+      } else {
+        setGameOver(true)
+      }
       return
     }
 
     const newSnake = [newHead, ...prevSnake]
-    const food = foodRef.current
-
-    if (newHead.x === food.x && newHead.y === food.y) {
+    const eatenIndex = foodRef.current.findIndex((food) => newHead.x === food.x && newHead.y === food.y)
+    if (eatenIndex !== -1) {
+      const eaten = foodRef.current[eatenIndex]
       setScore((s) => s + 1)
-      foodRef.current = randomFood(newSnake)
+      if (eaten.isCoin) earnCoins(1)
+      slowChargeRef.current = Math.min(5, slowChargeRef.current + 1)
+      setSlowCharge(slowChargeRef.current)
+      const nextFoods = foodRef.current.filter((_, index) => index !== eatenIndex)
+      foodRef.current = [...nextFoods, randomFood(newSnake, nextFoods)]
     } else {
       newSnake.pop()
     }
 
     snakeRef.current = newSnake
     dirtyRef.current = true
-  }, [])
+  }, [earnCoins])
 
   const resetGame = () => {
     const initialSnake = [{ x: 10, y: 10 }]
     snakeRef.current = initialSnake
-    foodRef.current = randomFood(initialSnake)
+    const initialFoods: Food[] = []
+    foodRef.current = Array.from({ length: 1 + upgradesRef.current.extraApples }, () => {
+      const food = randomFood(initialSnake, initialFoods)
+      initialFoods.push(food)
+      return food
+    })
     directionRef.current = { x: 1, y: 0 }
     lastAppliedDirection.current = { x: 1, y: 0 }
     stepAccumRef.current = 0
@@ -120,15 +182,75 @@ export default function SnakePage() {
     setScore(0)
     setGameOver(false)
     setPaused(false)
+    slowChargeRef.current = 5
+    setSlowCharge(5)
+    setSlowActive(false)
+    setShieldAvailable(upgradesRef.current.shield)
     submittedRef.current = false
     setStarted(true)
   }
+
+  const spendCoins = useCallback(async (amount: number) => {
+    const { data, error } = await supabase.rpc('spend_coins', { p_amount: amount })
+    if (error || typeof data !== 'number') {
+      setSyncError(error?.message || 'Not enough coins for that purchase.')
+      return null
+    }
+    setCoins(data)
+    return data
+  }, [supabase])
 
   const submitScore = useCallback(async (finalScore: number) => {
     if (!user || finalScore <= 0) return
     const { error } = await supabase.rpc('submit_game_score', { p_game: 'snake', p_score: finalScore })
     if (error) console.error('[snake] failed to submit score:', error.message, error)
   }, [supabase, user])
+
+  const buyUpgrade = async (key: keyof typeof SNAKE_UPGRADE_PRICES) => {
+    if (!user || busyKey) return
+    const price = SNAKE_UPGRADE_PRICES[key]
+    if ((key === 'slowDown' && upgrades.slowDown) || (key === 'shield' && upgrades.shield)) return
+    setBusyKey(key)
+    const balance = await spendCoins(price)
+    if (balance === null) { setBusyKey(null); return }
+    const next = { ...upgrades, [key]: key === 'extraApples' ? upgrades.extraApples + 1 : true }
+    const column = key === 'extraApples' ? 'snake_extra_apples' : key === 'slowDown' ? 'snake_slow_down' : 'snake_shield'
+    const { error } = await supabase.from('profiles').update({ [column]: next[key] }).eq('id', user.id)
+    if (error) {
+      await supabase.rpc('earn_coins', { p_amount: price })
+      setCoins(balance + price)
+      setSyncError(`Purchase didn't save: ${error.message}`)
+    } else {
+      setUpgrades(next)
+      if (key === 'shield') setShieldAvailable(true)
+      setSyncError(null)
+    }
+    setBusyKey(null)
+  }
+
+  const buyTheme = async (themeKey: SnakeThemeKey, customName: string) => {
+    if (!user || busyKey || ownedThemeKeys.includes(themeKey)) return
+    const price = SNAKE_THEMES[themeKey].price
+    setBusyKey(`theme:${themeKey}`)
+    const balance = await spendCoins(price)
+    if (balance === null) { setBusyKey(null); return }
+    const { error } = await supabase.from('snake_theme_purchases').insert({ user_id: user.id, theme_key: themeKey, custom_name: customName })
+    if (error) {
+      await supabase.rpc('earn_coins', { p_amount: price })
+      setCoins(balance + price)
+      setSyncError(`Theme purchase didn't save: ${error.message}`)
+    } else {
+      setOwnedThemeKeys((keys) => [...keys, themeKey])
+      setSyncError(null)
+    }
+    setBusyKey(null)
+  }
+
+  const selectTheme = async (themeKey: SnakeThemeKey | null) => {
+    setActiveThemeKey(themeKey)
+    if (user) await supabase.from('profiles').update({ snake_active_theme: themeKey }).eq('id', user.id)
+    dirtyRef.current = true
+  }
 
   useEffect(() => {
     if (gameOver && !submittedRef.current) {
@@ -148,6 +270,13 @@ export default function SnakePage() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (GUARD_KEYS.has(e.key)) e.preventDefault()
+      if (e.key === ' ') {
+        if (upgradesRef.current.slowDown && startedRef.current && !gameOverRef.current) {
+          e.preventDefault()
+          slowHeldRef.current = true
+        }
+        return
+      }
       if (e.key === 'p' || e.key === 'P') {
         if (startedRef.current && !gameOverRef.current) setPaused((currentPaused) => !currentPaused)
         return
@@ -159,8 +288,10 @@ export default function SnakePage() {
       else if (e.key === 'ArrowLeft' && dir.x === 0) directionRef.current = { x: -1, y: 0 }
       else if (e.key === 'ArrowRight' && dir.x === 0) directionRef.current = { x: 1, y: 0 }
     }
+    const handleKeyUp = (e: KeyboardEvent) => { if (e.key === ' ') slowHeldRef.current = false }
     window.addEventListener('keydown', handleKeyDown, { passive: false })
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+    return () => { window.removeEventListener('keydown', handleKeyDown); window.removeEventListener('keyup', handleKeyUp) }
   }, [])
 
   useEffect(() => {
@@ -170,9 +301,16 @@ export default function SnakePage() {
       lastFrameRef.current = now
 
       if (startedRef.current && !gameOverRef.current && !pausedRef.current) {
+        const slowing = slowHeldRef.current && slowChargeRef.current > 0 && upgradesRef.current.slowDown
+        if (slowing) {
+          slowChargeRef.current = Math.max(0, slowChargeRef.current - dt / 1000)
+          setSlowCharge(slowChargeRef.current)
+        }
+        setSlowActive(slowing)
         stepAccumRef.current += dt
-        while (stepAccumRef.current >= STEP_MS) {
-          stepAccumRef.current -= STEP_MS
+        const stepMs = slowing ? STEP_MS * 2 : STEP_MS
+        while (stepAccumRef.current >= stepMs) {
+          stepAccumRef.current -= stepMs
           step()
         }
       }
@@ -191,9 +329,15 @@ export default function SnakePage() {
 
   return (
     <main style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1rem' }}>Snake</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}><h1 style={{ color: 'var(--color-accent)', margin: 0 }}>Snake</h1><button onClick={() => setShopOpen(true)} style={{ padding: '0.4rem 0.9rem', background: 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Shop - Coins {coins}</button></div>
       <p style={{ marginBottom: '1rem' }}>Score: {score}</p>
 
+      {syncError && <p style={{ color: '#a21112', fontSize: '0.8rem' }}>{syncError}</p>}
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
+      <aside style={{ width: 130, border: '1px solid var(--color-border)', borderRadius: '6px', padding: '0.75rem', color: 'var(--color-panel-text)', fontSize: '0.8rem' }}>
+        <strong>Snake status</strong><p style={{ margin: '0.75rem 0 0.5rem' }}>Shield: {shieldAvailable ? 'READY' : 'NONE'}</p><p style={{ margin: '0 0 0.5rem' }}>Time control</p><div style={{ height: 8, background: 'var(--color-border)', borderRadius: 4 }}><div style={{ height: '100%', width: `${slowCharge / 5 * 100}%`, background: slowActive ? '#3BCEAC' : 'var(--color-accent)', borderRadius: 4 }} /></div><small>{upgrades.slowDown ? `${slowCharge.toFixed(1)}s ${slowActive ? 'active' : 'available'}` : 'Shop upgrade'}</small>
+      </aside>
       <GameCanvasFrame>
         <canvas
           ref={canvasRef}
@@ -251,8 +395,10 @@ export default function SnakePage() {
           </div>
         )}
       </GameCanvasFrame>
+      </div>
 
-      <p style={{ marginTop: '1rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Use arrow keys to move · P pause</p>
+      <p style={{ marginTop: '1rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Use arrow keys to move · Hold Space to slow down · P pause</p>
+      {shopOpen && <SnakeShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} ownedThemeKeys={ownedThemeKeys} activeThemeKey={activeThemeKey} busyKey={busyKey} onBuyUpgrade={buyUpgrade} onBuyTheme={buyTheme} onSelectTheme={selectTheme} />}
     </main>
   )
 }
