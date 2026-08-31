@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useDomeSession } from '@/components/DomeSession'
 
 type NewsItem = {
   title: string
@@ -17,26 +17,11 @@ const CATEGORIES = [
 ]
 
 export default function NewsPage() {
+  const { profile } = useDomeSession()
   const [items, setItems] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [category, setCategory] = useState('general')
-  const [newsEnabled, setNewsEnabled] = useState(true)
-  const supabase = createClient()
-
-  useEffect(() => {
-    const loadDefault = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('news_category')
-          .eq('id', user.id)
-          .single()
-        if (profile?.news_category) setCategory(profile.news_category)
-      }
-    }
-    loadDefault()
-  }, [])
+  const [category, setCategory] = useState(profile?.news_category || 'general')
+  const newsEnabled = profile?.news_enabled ?? true
 
   useEffect(() => {
     setLoading(true)
@@ -49,27 +34,13 @@ export default function NewsPage() {
       .catch(() => setLoading(false))
   }, [category])
 
-  useEffect(() => {
-    const checkEnabled = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('news_enabled')
-        .eq('id', user.id)
-        .single()
-      setNewsEnabled(profile?.news_enabled ?? true)
-    }
-    checkEnabled()
-  }, [])
-
   if (!newsEnabled) {
     return (
       <main style={{ padding: '2rem' }}>
-        <h1 style={{ color: '#EB4600' }}>News</h1>
-        <p style={{ color: '#666' }}>
+        <h1 style={{ color: 'var(--color-accent)' }}>News</h1>
+        <p style={{ color: 'var(--color-muted)' }}>
           News is turned off. You can re-enable it from your{' '}
-          <a href="/profile" style={{ color: '#EB4600' }}>
+          <a href="/profile" style={{ color: 'var(--color-accent)' }}>
             Profile
           </a>
           .
@@ -80,12 +51,12 @@ export default function NewsPage() {
 
   return (
     <main style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', borderBottom: '4px solid #1A1A1A', paddingBottom: '0.75rem', marginBottom: '0.5rem' }}>
-        <p style={{ margin: 0, fontSize: '0.75rem', letterSpacing: '0.2em', color: '#666' }}>THE DOME PRESENTS</p>
-        <h1 style={{ margin: '0.1rem 0', fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '3rem', fontWeight: 900, letterSpacing: '0.02em', color: '#1A1A1A' }}>
+      <div style={{ textAlign: 'center', borderBottom: '4px solid var(--color-text)', paddingBottom: '0.75rem', marginBottom: '0.5rem' }}>
+        <p style={{ margin: 0, fontSize: '0.75rem', letterSpacing: '0.2em', color: 'var(--color-muted)' }}>THE DOME PRESENTS</p>
+        <h1 style={{ margin: '0.1rem 0', fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '3rem', fontWeight: 900, letterSpacing: '0.02em', color: 'var(--color-text)' }}>
           DAILY DOME NEWS
         </h1>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#666', fontFamily: 'Georgia, serif' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--color-muted)', fontFamily: 'Georgia, serif' }}>
           <span>{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
           <span>{CATEGORIES.find((c) => c.value === category)?.label.toUpperCase()} EDITION</span>
         </div>
@@ -95,7 +66,7 @@ export default function NewsPage() {
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          style={{ padding: '0.4rem', border: '1px solid #ccc', borderRadius: '6px', fontSize: '0.85rem' }}
+          style={{ padding: '0.4rem', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '0.85rem' }}
         >
           {CATEGORIES.map((cat) => (
             <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -103,8 +74,8 @@ export default function NewsPage() {
         </select>
       </div>
 
-      {loading && <p style={{ color: '#999' }}>Loading headlines — may take a few seconds...</p>}
-      {!loading && items.length === 0 && <p style={{ color: '#999' }}>No headlines available.</p>}
+      {loading && <p style={{ color: 'var(--color-muted)' }}>Loading headlines — may take a few seconds...</p>}
+      {!loading && items.length === 0 && <p style={{ color: 'var(--color-muted)' }}>No headlines available.</p>}
 
       {!loading && items.length > 0 && (
         <>
@@ -112,7 +83,7 @@ export default function NewsPage() {
             href={items[0].link}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ display: 'flex', gap: '1.5rem', textDecoration: 'none', color: '#1A1A1A', borderBottom: '2px solid #1A1A1A', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}
+            style={{ display: 'flex', gap: '1.5rem', textDecoration: 'none', color: 'var(--color-text)', borderBottom: '2px solid var(--color-text)', paddingBottom: '1.5rem', marginBottom: '1.5rem' }}
           >
             {items[0].thumbnail && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -120,7 +91,7 @@ export default function NewsPage() {
             )}
             <div>
               <h2 style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '1.6rem', margin: '0 0 0.5rem 0', lineHeight: 1.2 }}>{items[0].title}</h2>
-              <p style={{ fontFamily: 'Georgia, serif', fontSize: '0.95rem', color: '#333', margin: 0 }}>{items[0].blurb}</p>
+              <p style={{ fontFamily: 'Georgia, serif', fontSize: '0.95rem', color: 'var(--color-muted)', margin: 0 }}>{items[0].blurb}</p>
             </div>
           </a>
 
@@ -131,14 +102,14 @@ export default function NewsPage() {
                 href={item.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ display: 'block', textDecoration: 'none', color: '#1A1A1A', borderTop: '1px solid #ccc', paddingTop: '0.75rem' }}
+                style={{ display: 'block', textDecoration: 'none', color: 'var(--color-text)', borderTop: '1px solid var(--color-border)', paddingTop: '0.75rem' }}
               >
                 {item.thumbnail && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={item.thumbnail} alt="" style={{ width: '100%', height: '120px', objectFit: 'cover', marginBottom: '0.5rem' }} />
                 )}
                 <h3 style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: '1.05rem', margin: '0 0 0.35rem 0', lineHeight: 1.25 }}>{item.title}</h3>
-                <p style={{ fontFamily: 'Georgia, serif', fontSize: '0.85rem', color: '#444', margin: 0 }}>{item.blurb}</p>
+                <p style={{ fontFamily: 'Georgia, serif', fontSize: '0.85rem', color: 'var(--color-muted)', margin: 0 }}>{item.blurb}</p>
               </a>
             ))}
           </div>

@@ -4,29 +4,22 @@ import WeatherWidget from '@/components/WeatherWidget'
 import NewsWidget from '@/components/NewsWidget'
 import QuickChatWidget from '@/components/QuickChatWidget'
 import { createClient } from '@/lib/supabase/server'
+import { getDomeSession } from '@/lib/dome-session'
 
 export default async function HubPage() {
+  const { profile } = await getDomeSession()
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
   const { data: announcements } = await supabase
     .from('announcements')
     .select('title, body, created_at')
     .order('created_at', { ascending: false })
     .limit(3)
 
-  let newsEnabled = true
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('news_enabled')
-      .eq('id', user.id)
-      .single()
-    newsEnabled = profile?.news_enabled ?? true
-  }
+  const newsEnabled = profile?.news_enabled ?? true
 
   return (
     <main style={{ padding: '2rem' }}>
-      <h1 style={{ color: '#EB4600', marginBottom: '1.5rem' }}>Welcome to The Dome</h1>
+      <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem' }}>Welcome to The Dome</h1>
       <div
         style={{
           display: 'grid',
@@ -39,7 +32,7 @@ export default async function HubPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {announcements.map((a, i) => (
                 <div key={i}>
-                  <p style={{ fontWeight: 600, color: '#1A1A1A', marginBottom: '0.15rem' }}>{a.title}</p>
+                  <p style={{ fontWeight: 600, color: 'var(--color-text)', marginBottom: '0.15rem' }}>{a.title}</p>
                   <p style={{ fontSize: '0.85rem' }}>{a.body}</p>
                 </div>
               ))}
