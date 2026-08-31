@@ -6,7 +6,9 @@ type ScoreRow = {
   profiles: { username: string | null } | null
 }
 
-async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>, game: 'snake' | 'tetris') {
+type GameKey = 'snake' | 'tetris' | 'dinosaur' | 'minesweeper'
+
+async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>, game: GameKey) {
   const { data } = await supabase
     .from('scores')
     .select('score, created_at, profiles(username)')
@@ -57,9 +59,11 @@ function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
 
 export default async function LeaderboardPage() {
   const supabase = await createClient()
-  const [snakeScores, tetrisScores] = await Promise.all([
+  const [snakeScores, tetrisScores, dinosaurScores, minesweeperScores] = await Promise.all([
     getTopScores(supabase, 'snake'),
     getTopScores(supabase, 'tetris'),
+    getTopScores(supabase, 'dinosaur'),
+    getTopScores(supabase, 'minesweeper'),
   ])
 
   return (
@@ -69,6 +73,8 @@ export default async function LeaderboardPage() {
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
         <ArcadePanel title="SNAKE" rows={snakeScores} />
         <ArcadePanel title="TETRIS" rows={tetrisScores} />
+        <ArcadePanel title="DINOSAUR GAME" rows={dinosaurScores} />
+        <ArcadePanel title="MINESWEEPER" rows={minesweeperScores} />
       </div>
     </main>
   )

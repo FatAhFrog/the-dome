@@ -12,6 +12,8 @@ const navItems = [
   { label: 'Weather', href: '/apps/weather' },
   { label: 'Snake', href: '/apps/snake' },
   { label: 'Tetris', href: '/apps/tetris' },
+  { label: 'Dinosaur Game', href: '/apps/dinosaur' },
+  { label: 'Minesweeper', href: '/apps/minesweeper' },
   { label: 'Leaderboard', href: '/apps/leaderboard' },
   { label: 'Races', href: '/apps/races' },
 ]
