@@ -1,24 +1,55 @@
 alter table public.profiles
+  add column if not exists snake_coins integer not null default 0,
   add column if not exists snake_extra_apples integer not null default 0,
   add column if not exists snake_slow_down boolean not null default false,
-  add column if not exists snake_shield boolean not null default false,
-  add column if not exists snake_active_theme text;
+  add column if not exists snake_shield boolean not null default false;
 
-create table if not exists public.snake_theme_purchases (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  theme_key text not null,
-  custom_name text not null,
-  purchased_at timestamptz not null default now(),
-  unique (user_id, theme_key)
-);
+alter table public.profiles
+  add constraint profiles_snake_coins_non_negative check (snake_coins >= 0);
 
-alter table public.snake_theme_purchases enable row level security;
+create or replace function public.snake_earn_coins(p_amount integer)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_balance integer;
+begin
+  if auth.uid() is null or p_amount <= 0 then
+    return null;
+  end if;
 
-create policy "Users can view their own Snake theme purchases"
-  on public.snake_theme_purchases for select
-  using (auth.uid() = user_id);
+  update public.profiles
+    set snake_coins = snake_coins + p_amount
+    where id = auth.uid()
+    returning snake_coins into new_balance;
+  return new_balance;
+end;
+$$;
 
-create policy "Users can buy Snake themes for themselves"
-  on public.snake_theme_purchases for insert
-  with check (auth.uid() = user_id);
+create or replace function public.snake_spend_coins(p_amount integer)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_balance integer;
+begin
+  if auth.uid() is null or p_amount <= 0 then
+    return null;
+  end if;
+
+  update public.profiles
+    set snake_coins = snake_coins - p_amount
+    where id = auth.uid() and snake_coins >= p_amount
+    returning snake_coins into new_balance;
+  return new_balance;
+end;
+$$;
+
+revoke all on function public.snake_earn_coins(integer) from public;
+revoke all on function public.snake_spend_coins(integer) from public;
+grant execute on function public.snake_earn_coins(integer) to authenticated;
+grant execute on function public.snake_spend_coins(integer) to authenticated;

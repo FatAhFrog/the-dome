@@ -1,4 +1,4 @@
-export type ThemeKey = 'dome' | 'sunset_lagoon' | 'neon_arcade' | 'pastel_dream' | 'crimson_void'
+export type ThemeKey = 'dome' | 'sunset_lagoon' | 'neon_arcade' | 'pastel_dream' | 'crimson_void' | 'graphite_glow' | 'purple_burst' | 'mint_wave'
 
 export type PieceKey = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'
 export type PieceColors = Record<PieceKey, string>
@@ -7,6 +7,7 @@ export type ThemeDefinition = {
   key: ThemeKey
   label: string
   description: string
+  shop: 'both' | 'tetris' | 'snake'
   // Page-level surface + text
   background: string
   panelBackground: string
@@ -35,6 +36,7 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     key: 'dome',
     label: 'Classic Dome',
     description: 'The original orange-on-white look.',
+    shop: 'both',
     background: '#ffffff',
     panelBackground: '#f7f7f7',
     text: '#1a1a1a',
@@ -50,6 +52,7 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     key: 'sunset_lagoon',
     label: 'Sunset Smooth',
     description: 'A soft, warm sunset gradient from red to teal-blue dusk.',
+    shop: 'tetris',
     background: '#FFF8F0',
     panelBackground: '#FFF1DE',
     text: '#264653',
@@ -65,6 +68,7 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     key: 'neon_arcade',
     label: 'Neon Glow',
     description: 'Retro-arcade blacklight blues, magenta and cyberpunk neon.',
+    shop: 'tetris',
     background: '#0B0B14',
     panelBackground: '#14142A',
     text: '#E7E7FB',
@@ -80,6 +84,7 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     key: 'pastel_dream',
     label: 'Aether',
     description: 'Airy, glass-like pastels — soft lavender-blue into cotton-candy pink.',
+    shop: 'tetris',
     background: '#FBF9FC',
     panelBackground: '#F3F0F8',
     text: '#4A4458',
@@ -95,6 +100,7 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     key: 'crimson_void',
     label: 'Red Wunz Go Fasta',
     description: 'A very dark dome soaked in deep reds.',
+    shop: 'tetris',
     background: '#1F1C1F',
     panelBackground: '#2B1012',
     text: '#F2DEDE',
@@ -106,9 +112,59 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     pieces: { I: '#FF3333', O: '#FF6666', T: '#ED1C24', S: '#D9272E', Z: '#FF1A2A', J: '#B51F2A', L: '#FF4B4B' },
     price: THEME_PRICE,
   },
+  graphite_glow: {
+    key: 'graphite_glow',
+    label: 'Graphite Glow',
+    description: 'Cold gray, mustard yellow, and black contrast for a sharper arcade look.',
+    shop: 'snake',
+    background: '#d6d6d6',
+    panelBackground: '#d6d6d6',
+    text: '#1a1a1a',
+    panelText: '#1a1a1a',
+    border: '#9a9a9a',
+    accent: '#ffd100',
+    accentSecondary: '#202020',
+    onAccent: '#111111',
+    pieces: { I: '#d6d6d6', O: '#ffe032', T: '#ffd100', S: '#202020', Z: '#333533', J: '#f5f5f5', L: '#4d4d4d' },
+    price: THEME_PRICE,
+  },
+  purple_burst: {
+    key: 'purple_burst',
+    label: 'Purple Burst',
+    description: 'Deep plum, punchy pink, gold, teal, and green with high-energy arcade contrast.',
+    shop: 'snake',
+    background: '#540d6e',
+    panelBackground: '#540d6e',
+    text: '#f8f4ff',
+    panelText: '#f8f4ff',
+    border: '#7d2f87',
+    accent: '#ee4266',
+    accentSecondary: '#ffd23f',
+    onAccent: '#ffffff',
+    pieces: { I: '#540d6e', O: '#ee4266', T: '#ffd23f', S: '#3bceac', Z: '#0ead69', J: '#6c3ea1', L: '#b33b7a' },
+    price: THEME_PRICE,
+  },
+  mint_wave: {
+    key: 'mint_wave',
+    label: 'Mint Wave',
+    description: 'Oceanic blue gradients with mint and lime that feel calm but bright.',
+    shop: 'snake',
+    background: '#22577a',
+    panelBackground: '#22577a',
+    text: '#eefaf7',
+    panelText: '#eefaf7',
+    border: '#3d8e9a',
+    accent: '#38a3a5',
+    accentSecondary: '#57cc99',
+    onAccent: '#062e2f',
+    pieces: { I: '#22577a', O: '#38a3a5', T: '#57cc99', S: '#80ed99', Z: '#c7f9cc', J: '#1d4f69', L: '#7ae3d1' },
+    price: THEME_PRICE,
+  },
 }
 
 export const PURCHASABLE_THEME_KEYS = (Object.keys(THEMES) as ThemeKey[]).filter((key) => THEMES[key].price !== null)
+export const TETRIS_PURCHASABLE_THEME_KEYS = (Object.keys(THEMES) as ThemeKey[]).filter((key) => THEMES[key].price !== null && THEMES[key].shop !== 'snake')
+export const SNAKE_PURCHASABLE_THEME_KEYS = (Object.keys(THEMES) as ThemeKey[]).filter((key) => THEMES[key].price !== null && THEMES[key].shop !== 'tetris')
 
 export function isThemeKey(value: string | null | undefined): value is ThemeKey {
   return !!value && value in THEMES

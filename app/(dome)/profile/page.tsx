@@ -54,7 +54,8 @@ export default function ProfilePage() {
       setMetricsModeTetris(profile?.metrics_mode_tetris ?? false)
 
       const { data: purchases } = await supabase.from('theme_purchases').select('theme_key, custom_name').eq('user_id', user.id)
-      setOwnedThemes((purchases || []).filter((p) => isThemeKey(p.theme_key)).map((p) => ({ key: p.theme_key as ThemeKey, name: p.custom_name })))
+      const owned = (purchases || []).filter((p) => isThemeKey(p.theme_key)).map((p) => ({ key: p.theme_key as ThemeKey, name: p.custom_name }))
+      setOwnedThemes(owned)
       setLoading(false)
     }
 

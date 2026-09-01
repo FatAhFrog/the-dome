@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PURCHASABLE_THEME_KEYS, THEMES, THEME_PRICE, ThemeKey } from '@/lib/themes'
+import { TETRIS_PURCHASABLE_THEME_KEYS, THEMES, THEME_PRICE, ThemeKey } from '@/lib/themes'
 import { MAX_SPEED_LEVEL, UPGRADE_PRICES, speedLevelPrice, type TetrisUpgrades } from '@/lib/tetris/shop'
 
 export type { TetrisUpgrades } from '@/lib/tetris/shop'
@@ -99,7 +99,7 @@ export default function ShopPanel({
             <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem' }}>Dome Themes</h3>
             <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--color-muted)' }}>Buying a theme re-skins the whole Dome, not just Tetris. Pick which one is active from your Profile.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {PURCHASABLE_THEME_KEYS.map((key) => {
+              {TETRIS_PURCHASABLE_THEME_KEYS.map((key) => {
                 const theme = THEMES[key]
                 const owned = ownedThemeKeys.includes(key)
                 return (

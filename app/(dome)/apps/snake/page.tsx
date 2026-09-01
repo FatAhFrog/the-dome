@@ -6,7 +6,7 @@ import { useDomeSession } from '@/components/DomeSession'
 import { readCssVar, THEME_CHANGE_EVENT } from '@/lib/themes'
 import GameCanvasFrame from '@/components/GameCanvasFrame'
 import SnakeShopPanel from '@/components/SnakeShopPanel'
-import { SNAKE_THEMES, SNAKE_UPGRADE_PRICES, SnakeThemeKey, SnakeUpgrades } from '@/lib/snake/shop'
+import { SNAKE_UPGRADE_PRICES, SnakeUpgrades } from '@/lib/snake/shop'
 
 const GRID_SIZE = 20
 const CELL_SIZE = 20
@@ -50,8 +50,6 @@ export default function SnakePage() {
   const [paused, setPaused] = useState(false)
   const [coins, setCoins] = useState(0)
   const [upgrades, setUpgrades] = useState<SnakeUpgrades>({ extraApples: 0, slowDown: false, shield: false })
-  const [ownedThemeKeys, setOwnedThemeKeys] = useState<string[]>([])
-  const [activeThemeKey, setActiveThemeKey] = useState<SnakeThemeKey | null>(null)
   const [shopOpen, setShopOpen] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -82,19 +80,16 @@ export default function SnakePage() {
   useEffect(() => {
     if (!user) return
     const loadSnakeShop = async () => {
-      const { data: profile } = await supabase.from('profiles').select('coins, snake_extra_apples, snake_slow_down, snake_shield, snake_active_theme').eq('id', user.id).single()
-      setCoins(profile?.coins ?? 0)
+      const { data: profile } = await supabase.from('profiles').select('snake_coins, snake_extra_apples, snake_slow_down, snake_shield').eq('id', user.id).single()
+      setCoins(profile?.snake_coins ?? 0)
       setUpgrades({ extraApples: profile?.snake_extra_apples ?? 0, slowDown: profile?.snake_slow_down ?? false, shield: profile?.snake_shield ?? false })
       setShieldAvailable(profile?.snake_shield ?? false)
-      setActiveThemeKey(profile?.snake_active_theme && profile.snake_active_theme in SNAKE_THEMES ? profile.snake_active_theme as SnakeThemeKey : null)
-      const { data: purchases } = await supabase.from('snake_theme_purchases').select('theme_key').eq('user_id', user.id)
-      setOwnedThemeKeys((purchases || []).map((purchase) => purchase.theme_key))
     }
     loadSnakeShop()
   }, [supabase, user])
 
   const earnCoins = useCallback(async (amount: number) => {
-    const { data, error } = await supabase.rpc('earn_coins', { p_amount: amount })
+    const { data, error } = await supabase.rpc('snake_earn_coins', { p_amount: amount })
     if (!error && typeof data === 'number') setCoins(data)
   }, [supabase])
 
@@ -107,18 +102,18 @@ export default function SnakePage() {
     ctx.fillStyle = readCssVar('--color-panel-background', '#fafafa')
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
 
-    const colors = activeThemeKey ? SNAKE_THEMES[activeThemeKey].colors : [readCssVar('--color-accent-secondary', '#FFAE00'), readCssVar('--color-accent', '#EB4600')]
-    foodRef.current.forEach((food, index) => {
-      ctx.fillStyle = food.isCoin ? '#FFD23F' : colors[index % colors.length]
+    const themeFoodColor = readCssVar('--color-accent-secondary', '#FFAE00')
+    foodRef.current.forEach((food) => {
+      ctx.fillStyle = food.isCoin ? '#FFD23F' : themeFoodColor
       ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
     })
 
     snakeRef.current.forEach((s, i) => {
-      ctx.fillStyle = activeThemeKey ? SNAKE_THEMES[activeThemeKey].colors[i === 0 ? 3 : 4] : i === 0 ? readCssVar('--color-accent', '#EB4600') : readCssVar('--color-text', '#1A1A1A')
+      ctx.fillStyle = i === 0 ? readCssVar('--color-accent', '#EB4600') : readCssVar('--color-text', '#1A1A1A')
       ctx.fillRect(s.x * CELL_SIZE, s.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
     })
     return true
-  }, [activeThemeKey])
+  }, [])
 
   const step = useCallback(() => {
     const moveDirection = directionRef.current
@@ -191,7 +186,7 @@ export default function SnakePage() {
   }
 
   const spendCoins = useCallback(async (amount: number) => {
-    const { data, error } = await supabase.rpc('spend_coins', { p_amount: amount })
+    const { data, error } = await supabase.rpc('snake_spend_coins', { p_amount: amount })
     if (error || typeof data !== 'number') {
       setSyncError(error?.message || 'Not enough coins for that purchase.')
       return null
@@ -217,7 +212,7 @@ export default function SnakePage() {
     const column = key === 'extraApples' ? 'snake_extra_apples' : key === 'slowDown' ? 'snake_slow_down' : 'snake_shield'
     const { error } = await supabase.from('profiles').update({ [column]: next[key] }).eq('id', user.id)
     if (error) {
-      await supabase.rpc('earn_coins', { p_amount: price })
+      await supabase.rpc('snake_earn_coins', { p_amount: price })
       setCoins(balance + price)
       setSyncError(`Purchase didn't save: ${error.message}`)
     } else {
@@ -226,30 +221,6 @@ export default function SnakePage() {
       setSyncError(null)
     }
     setBusyKey(null)
-  }
-
-  const buyTheme = async (themeKey: SnakeThemeKey, customName: string) => {
-    if (!user || busyKey || ownedThemeKeys.includes(themeKey)) return
-    const price = SNAKE_THEMES[themeKey].price
-    setBusyKey(`theme:${themeKey}`)
-    const balance = await spendCoins(price)
-    if (balance === null) { setBusyKey(null); return }
-    const { error } = await supabase.from('snake_theme_purchases').insert({ user_id: user.id, theme_key: themeKey, custom_name: customName })
-    if (error) {
-      await supabase.rpc('earn_coins', { p_amount: price })
-      setCoins(balance + price)
-      setSyncError(`Theme purchase didn't save: ${error.message}`)
-    } else {
-      setOwnedThemeKeys((keys) => [...keys, themeKey])
-      setSyncError(null)
-    }
-    setBusyKey(null)
-  }
-
-  const selectTheme = async (themeKey: SnakeThemeKey | null) => {
-    setActiveThemeKey(themeKey)
-    if (user) await supabase.from('profiles').update({ snake_active_theme: themeKey }).eq('id', user.id)
-    dirtyRef.current = true
   }
 
   useEffect(() => {
@@ -398,7 +369,7 @@ export default function SnakePage() {
       </div>
 
       <p style={{ marginTop: '1rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Use arrow keys to move · Hold Space to slow down · P pause</p>
-      {shopOpen && <SnakeShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} ownedThemeKeys={ownedThemeKeys} activeThemeKey={activeThemeKey} busyKey={busyKey} onBuyUpgrade={buyUpgrade} onBuyTheme={buyTheme} onSelectTheme={selectTheme} />}
+      {shopOpen && <SnakeShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} busyKey={busyKey} onBuyUpgrade={buyUpgrade} />}
     </main>
   )
 }
