@@ -28,7 +28,9 @@ const ordinal = (n: number) => {
   }
 }
 
-function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
+const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`
+
+function ArcadePanel({ title, game, rows }: { title: string; game: GameKey; rows: ScoreRow[] }) {
   return (
     <div style={{ background: 'var(--color-panel-background)', border: '4px solid var(--color-accent)', borderRadius: '4px', padding: '1.5rem', fontFamily: '"Press Start 2P", monospace', color: 'var(--color-panel-text)', flex: 1, minWidth: '320px' }}>
       <h2 style={{ textAlign: 'center', color: 'var(--color-accent)', fontSize: '1rem', marginBottom: '1.5rem', letterSpacing: '0.05em' }}>{title}</h2>
@@ -43,7 +45,7 @@ function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `color-mix(in srgb, var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]}) 68%, var(--color-panel-text))`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
               <span>{ordinal(i + 1)}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.username || 'UNKNOWN').toUpperCase()}</span>
-              <span style={{ textAlign: 'right' }}>{row.score}</span>
+              <span style={{ textAlign: 'right' }}>{game === 'minesweeper' ? formatTime(row.score) : row.score}</span>
             </div>
           ))}
         </div>
@@ -66,10 +68,10 @@ export default async function LeaderboardPage() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');`}</style>
       <h1 style={{ color: 'var(--color-accent)', marginBottom: '1.5rem', fontFamily: '"Press Start 2P", monospace', fontSize: '1.3rem' }}>LEADERBOARD</h1>
       <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-        <ArcadePanel title="SNAKE" rows={snakeScores} />
-        <ArcadePanel title="TETRIS" rows={tetrisScores} />
-        <ArcadePanel title="DINO" rows={dinoScores} />
-        <ArcadePanel title="MINESWEEPER" rows={minesweeperScores} />
+        <ArcadePanel title="SNAKE" game="snake" rows={snakeScores} />
+        <ArcadePanel title="TETRIS" game="tetris" rows={tetrisScores} />
+        <ArcadePanel title="DINO" game="dino" rows={dinoScores} />
+        <ArcadePanel title="MINESWEEPER" game="minesweeper" rows={minesweeperScores} />
       </div>
     </main>
   )
