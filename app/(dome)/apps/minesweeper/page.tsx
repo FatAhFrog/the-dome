@@ -132,11 +132,11 @@ export default function MinesweeperPage() {
   }
 
   return (
-    <main style={{ padding: '2rem', color: 'var(--color-text)', maxWidth: '720px' }}>
+    <main style={{ padding: '2rem', color: 'var(--color-text)', maxWidth: '720px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
       <h1 style={{ color: 'var(--color-accent)', marginBottom: '0.35rem' }}>Minesweeper</h1>
       <p style={{ color: 'var(--color-muted)', marginTop: 0 }}>Beta board</p>
 
-      <section style={{ marginTop: '1.5rem', padding: '1rem', maxWidth: 'min(100%, 420px)', background: 'var(--color-panel-background)', border: '2px solid var(--color-border)', borderRadius: '8px' }}>
+      <section style={{ marginTop: '1.5rem', padding: '1rem', width: 'min(100%, 420px)', boxSizing: 'border-box', background: 'var(--color-panel-background)', border: '2px solid var(--color-border)', borderRadius: '8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', color: 'var(--color-panel-text)' }}>
           <strong>Time: {seconds}s</strong>
           <span>{MINE_COUNT} mines</span>
@@ -153,6 +153,7 @@ export default function MinesweeperPage() {
                 onClick={() => reveal(row, col)}
                 onContextMenu={(event) => toggleFlag(event, row, col)}
                 style={{
+                  position: 'relative',
                   minWidth: 0,
                   aspectRatio: '1',
                   padding: 0,
@@ -163,7 +164,7 @@ export default function MinesweeperPage() {
                   cursor: status === 'won' || status === 'lost' ? 'default' : 'pointer',
                 }}
               >
-                {cell.revealed ? (cell.mine ? 'X' : cell.adjacent || '') : cell.flagged ? '⚑' : ''}
+                {cell.revealed ? (cell.mine ? 'X' : cell.adjacent || '') : cell.flagged ? <span style={{ position: 'relative', zIndex: 1, display: 'block', color: 'var(--color-panel-text)', fontSize: '1.1em', lineHeight: 1 }}>⚑</span> : ''}
               </button>
             )
           }))}
