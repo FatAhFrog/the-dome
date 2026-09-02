@@ -1,4 +1,4 @@
-export type ThemeKey = 'dome' | 'sunset_lagoon' | 'neon_arcade' | 'pastel_dream' | 'crimson_void' | 'graphite_glow' | 'purple_burst' | 'mint_wave'
+export type ThemeKey = 'dome' | 'sunset_lagoon' | 'neon_arcade' | 'pastel_dream' | 'crimson_void' | 'graphite_glow' | 'purple_burst' | 'mint_wave' | 'retro_game'
 
 export type PieceKey = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'
 export type PieceColors = Record<PieceKey, string>
@@ -90,11 +90,11 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     panelBackground: '#F3F0F8',
     text: '#4A4458',
     panelText: '#4A4458',
-    border: '#E3DCEE',
-    accent: '#D0DBEF',
-    accentSecondary: '#F5CCD4',
+    border: '#C8BCE2',
+    accent: '#8FB3E8',
+    accentSecondary: '#F29AAF',
     onAccent: '#4A4458',
-    pieces: { I: '#C9DEF4', O: '#D0DBEF', T: '#D8D8E9', S: '#DFD5E4', Z: '#E6D2DF', J: '#EECFD9', L: '#F5CCD4' },
+    pieces: { I: '#8FC3F0', O: '#9CB9F2', T: '#B3A9E5', S: '#C7A3D1', Z: '#D99ABF', J: '#E89AAE', L: '#F2A0B0' },
     price: THEME_PRICE,
   },
   crimson_void: {
@@ -160,6 +160,22 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
     onAccent: '#062e2f',
     pieces: { I: '#9be564', O: '#38a3a5', T: '#57cc99', S: '#80ed99', Z: '#c7f9cc', J: '#1d4f69', L: '#7ae3d1' },
     price: THEME_PRICE,
+  },
+  retro_game: {
+    key: 'retro_game',
+    label: 'Retro-Game',
+    description: 'A bright handheld-inspired palette of deep blues, teal, and electric green.',
+    shop: 'snake',
+    background: '#01052f',
+    panelBackground: '#072b5d',
+    text: '#ffffff',
+    panelText: '#ffffff',
+    border: '#10596f',
+    accent: '#2dfa7c',
+    accentSecondary: '#26d279',
+    onAccent: '#020969',
+    pieces: { I: '#020969', O: '#09316c', T: '#10596f', S: '#188273', Z: '#1faa76', J: '#26d279', L: '#2dfa7c' },
+    price: SNAKE_THEME_PRICE,
   },
 }
 
