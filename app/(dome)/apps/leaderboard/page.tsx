@@ -19,8 +19,8 @@ async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>, 
   return (data as unknown as ScoreRow[]) || []
 }
 
-// Rank rows cycle through the 7 theme-driven tetromino colors, same set
-// Tetris itself uses — pulled at paint time via CSS vars, never hardcoded.
+// Rank rows cycle through the 7 theme-driven tetromino colors, then mix each
+// toward panel text so pale/dark pieces remain readable on every panel.
 const RETRO_COLOR_VARS = ['--piece-i', '--piece-o', '--piece-t', '--piece-s', '--piece-z', '--piece-j', '--piece-l']
 
 const ordinal = (n: number) => {
@@ -46,7 +46,7 @@ function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
             <span>RANK</span><span>NAME</span><span style={{ textAlign: 'right' }}>SCORE</span>
           </div>
           {rows.map((row, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]})`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `color-mix(in srgb, var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]}) 68%, var(--color-panel-text))`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
               <span>{ordinal(i + 1)}</span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.profiles?.username || 'UNKNOWN').toUpperCase()}</span>
               <span style={{ textAlign: 'right' }}>{row.score}</span>

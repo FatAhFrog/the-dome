@@ -1,7 +1,3 @@
-const COLORS: Record<string, string> = {
-  I: '#00c2c2', O: '#FFAE00', T: '#a259ff', S: '#3ddc84', Z: '#EB4600', J: '#3b82f6', L: '#ff7a1a',
-}
-
 const ICON_SHAPES: Record<string, number[][]> = {
   I: [[0, 0], [1, 0], [2, 0], [3, 0]],
   O: [[0, 0], [1, 0], [0, 1], [1, 1]],
@@ -16,7 +12,7 @@ export default function TetrisChampionBadge({ piece }: { piece: string | null })
   const cellPx = 6
   const shape = piece ? ICON_SHAPES[piece] : [[0, 0], [1, 0], [0, 1], [1, 1]]
   const gridWidth = Math.max(...shape.map(([x]) => x)) + 1
-  const color = piece ? COLORS[piece] : '#FFAE00'
+  const color = piece ? `var(--piece-${piece.toLowerCase()})` : 'var(--piece-o)'
 
   return (
     <span

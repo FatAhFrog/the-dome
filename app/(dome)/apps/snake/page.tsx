@@ -160,7 +160,9 @@ export default function SnakePage() {
       slowChargeRef.current = Math.min(5, slowChargeRef.current + 1)
       setSlowCharge(slowChargeRef.current)
       const nextFoods = foodRef.current.filter((_, index) => index !== eatenIndex)
-      const replacementFoods = [...nextFoods, randomFood(newSnake, nextFoods, 'apple')]
+      const replacementFoods = eaten.kind === 'apple'
+        ? [...nextFoods, randomFood(newSnake, nextFoods, 'apple')]
+        : nextFoods
       if (eaten.kind === 'apple' && Math.random() < 0.12) {
         replacementFoods.push(randomFood(newSnake, replacementFoods, 'coin'))
       }
