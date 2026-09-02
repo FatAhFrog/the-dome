@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
+import SnakeChampionBadge from '@/components/SnakeChampionBadge'
 
 type ScoreRow = {
   score: number
   created_at: string
-  profiles: { username: string | null } | null
+  user_id: string
+  profiles: { username: string | null; snake_crown_enabled: boolean; snake_crown_color_mode: string; snake_crown_color: string | null } | null
 }
 
 type GameKey = 'snake' | 'tetris' | 'dino' | 'minesweeper'
@@ -12,7 +14,7 @@ async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>, 
   const ascending = game === 'minesweeper'
   const { data } = await supabase
     .from('scores')
-    .select('score, created_at, profiles(username)')
+    .select('score, created_at, user_id, profiles(username, snake_crown_enabled, snake_crown_color_mode, snake_crown_color)')
     .eq('game', game)
     .order('score', { ascending })
     .limit(10)
@@ -48,7 +50,10 @@ function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
           {rows.map((row, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]})`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
               <span>{ordinal(i + 1)}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.profiles?.username || 'UNKNOWN').toUpperCase()}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                {(row.profiles?.username || 'UNKNOWN').toUpperCase()}
+                {title === 'SNAKE' && i === 0 && row.profiles?.snake_crown_enabled !== false && <SnakeChampionBadge color={row.profiles?.snake_crown_color_mode === 'custom' ? row.profiles.snake_crown_color || undefined : undefined} />}
+              </span>
               <span style={{ textAlign: 'right' }}>{row.score}</span>
             </div>
           ))}

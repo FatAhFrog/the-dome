@@ -25,7 +25,7 @@ export default function SnakeShopPanel({ open, onClose, coins, upgrades, busyKey
         </div>
 
         <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-muted)' }}>Earn 1 snake coin per coin apple and spend them here.</p>
+          <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--color-muted)' }}>Collect coins in Snake and spend them here.</p>
 
           <ShopItem title={`More Apples (Lv. ${upgrades.extraApples})`} description="Adds one more apple that can spawn each round." price={SNAKE_UPGRADE_PRICES.extraApples} owned={false} disabled={coins < SNAKE_UPGRADE_PRICES.extraApples} busy={busyKey === 'extraApples'} onBuy={() => onBuyUpgrade('extraApples')} buyLabel="Buy" />
           <ShopItem title="Slow Down" description="Hold Space to slow time for 5 seconds. Recharges 1 second per apple." price={SNAKE_UPGRADE_PRICES.slowDown} owned={upgrades.slowDown} disabled={coins < SNAKE_UPGRADE_PRICES.slowDown} busy={busyKey === 'slowDown'} onBuy={() => onBuyUpgrade('slowDown')} />

@@ -17,9 +17,9 @@ const GUARD_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '
 
 type Point = { x: number; y: number }
 
-type Food = Point & { isCoin: boolean }
+type Food = Point & { kind: 'apple' | 'coin' }
 
-const randomFood = (snake: Point[], foods: Food[]): Food => {
+const randomFood = (snake: Point[], foods: Food[], kind: Food['kind']): Food => {
   let food: Point
   do {
     food = {
@@ -27,7 +27,7 @@ const randomFood = (snake: Point[], foods: Food[]): Food => {
       y: Math.floor(Math.random() * GRID_SIZE),
     }
   } while (snake.some((s) => s.x === food.x && s.y === food.y) || foods.some((f) => f.x === food.x && f.y === food.y))
-  return { ...food, isCoin: Math.random() < 0.12 }
+  return { ...food, kind }
 }
 
 export default function SnakePage() {
@@ -36,7 +36,7 @@ export default function SnakePage() {
   const [supabase] = useState(() => createClient())
 
   const snakeRef = useRef<Point[]>([{ x: 10, y: 10 }])
-  const foodRef = useRef<Food[]>([{ x: 15, y: 10, isCoin: false }])
+  const foodRef = useRef<Food[]>([{ x: 15, y: 10, kind: 'apple' }])
   const directionRef = useRef<Point>({ x: 1, y: 0 })
   const lastAppliedDirection = useRef<Point>({ x: 1, y: 0 })
   const dirtyRef = useRef(true)
@@ -104,8 +104,14 @@ export default function SnakePage() {
 
     const themeFoodColor = readCssVar('--color-accent-secondary', '#FFAE00')
     foodRef.current.forEach((food) => {
-      ctx.fillStyle = food.isCoin ? '#FFD23F' : themeFoodColor
-      ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
+      ctx.fillStyle = food.kind === 'coin' ? '#FFD23F' : themeFoodColor
+      if (food.kind === 'coin') {
+        ctx.beginPath()
+        ctx.arc(food.x * CELL_SIZE + CELL_SIZE / 2, food.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2 - 2, 0, Math.PI * 2)
+        ctx.fill()
+      } else {
+        ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1)
+      }
     })
 
     snakeRef.current.forEach((s, i) => {
@@ -147,11 +153,15 @@ export default function SnakePage() {
     if (eatenIndex !== -1) {
       const eaten = foodRef.current[eatenIndex]
       setScore((s) => s + 1)
-      if (eaten.isCoin) earnCoins(1)
+      if (eaten.kind === 'coin') earnCoins(1)
       slowChargeRef.current = Math.min(5, slowChargeRef.current + 1)
       setSlowCharge(slowChargeRef.current)
       const nextFoods = foodRef.current.filter((_, index) => index !== eatenIndex)
-      foodRef.current = [...nextFoods, randomFood(newSnake, nextFoods)]
+      const replacementFoods = [...nextFoods, randomFood(newSnake, nextFoods, 'apple')]
+      if (eaten.kind === 'apple' && Math.random() < 0.12) {
+        replacementFoods.push(randomFood(newSnake, replacementFoods, 'coin'))
+      }
+      foodRef.current = replacementFoods
     } else {
       newSnake.pop()
     }
@@ -165,7 +175,7 @@ export default function SnakePage() {
     snakeRef.current = initialSnake
     const initialFoods: Food[] = []
     foodRef.current = Array.from({ length: 1 + upgradesRef.current.extraApples }, () => {
-      const food = randomFood(initialSnake, initialFoods)
+      const food = randomFood(initialSnake, initialFoods, 'apple')
       initialFoods.push(food)
       return food
     })

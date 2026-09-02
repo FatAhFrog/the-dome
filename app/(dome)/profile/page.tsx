@@ -18,6 +18,9 @@ export default function ProfilePage() {
   const [newsEnabled, setNewsEnabled] = useState(true)
   const [tetrisCrownEnabled, setTetrisCrownEnabled] = useState(true)
   const [tetrisCrownPiece, setTetrisCrownPiece] = useState('')
+  const [snakeCrownEnabled, setSnakeCrownEnabled] = useState(true)
+  const [snakeCrownColorMode, setSnakeCrownColorMode] = useState<'default' | 'custom'>('default')
+  const [snakeCrownColor, setSnakeCrownColor] = useState('#FFAE00')
   const [metricsModeTetris, setMetricsModeTetris] = useState(false)
   const [nextPreviewSize, setNextPreviewSize] = useState(22)
   const [activeTheme, setActiveTheme] = useState<ThemeKey>('dome')
@@ -39,7 +42,7 @@ export default function ProfilePage() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, tetris_next_preview_size, active_theme, metrics_mode_tetris')
+        .select('username, news_category, news_enabled, avatar_url, tetris_crown_enabled, tetris_crown_piece, snake_crown_enabled, snake_crown_color_mode, snake_crown_color, tetris_next_preview_size, active_theme, metrics_mode_tetris')
         .eq('id', user.id)
         .single()
 
@@ -49,6 +52,9 @@ export default function ProfilePage() {
       setAvatarUrl(profile?.avatar_url || null)
       setTetrisCrownEnabled(profile?.tetris_crown_enabled ?? true)
       setTetrisCrownPiece(profile?.tetris_crown_piece || '')
+      setSnakeCrownEnabled(profile?.snake_crown_enabled ?? true)
+      setSnakeCrownColorMode(profile?.snake_crown_color_mode === 'custom' ? 'custom' : 'default')
+      setSnakeCrownColor(profile?.snake_crown_color || '#FFAE00')
       setNextPreviewSize(profile?.tetris_next_preview_size || 22)
       setActiveTheme(isThemeKey(profile?.active_theme) ? profile.active_theme : 'dome')
       setMetricsModeTetris(profile?.metrics_mode_tetris ?? false)
@@ -90,6 +96,9 @@ export default function ProfilePage() {
         news_enabled: newsEnabled,
         tetris_crown_enabled: tetrisCrownEnabled,
         tetris_crown_piece: tetrisCrownPiece || null,
+        snake_crown_enabled: snakeCrownEnabled,
+        snake_crown_color_mode: snakeCrownColorMode,
+        snake_crown_color: snakeCrownColorMode === 'custom' ? snakeCrownColor : null,
         tetris_next_preview_size: nextPreviewSize,
         metrics_mode_tetris: metricsModeTetris,
       })
@@ -237,6 +246,23 @@ export default function ProfilePage() {
             >
               {pushLoading ? 'Enabling...' : 'Enable / Refresh notifications'}
             </button>
+          )}
+        </div>
+
+        <div>
+          <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>Snake champion styling</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <input type="checkbox" checked={snakeCrownEnabled} onChange={(e) => setSnakeCrownEnabled(e.target.checked)} />
+            <span>Show a snake crown next to my name if I&apos;m #1 on the Snake leaderboard</span>
+          </div>
+          {snakeCrownEnabled && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <select value={snakeCrownColorMode} onChange={(e) => setSnakeCrownColorMode(e.target.value as 'default' | 'custom')} style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}>
+                <option value="default">Default (theme color)</option>
+                <option value="custom">Custom color</option>
+              </select>
+              {snakeCrownColorMode === 'custom' && <input type="color" value={snakeCrownColor} onChange={(e) => setSnakeCrownColor(e.target.value)} aria-label="Custom snake crown color" style={{ width: '100%', height: 40, padding: 2, border: '1px solid var(--color-border)', borderRadius: '6px' }} />}
+            </div>
           )}
         </div>
 

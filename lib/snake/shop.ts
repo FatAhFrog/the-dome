@@ -5,9 +5,9 @@ export type SnakeUpgrades = {
 }
 
 export const SNAKE_UPGRADE_PRICES = {
-  extraApples: 125,
-  slowDown: 350,
-  shield: 200,
+  extraApples: 94,
+  slowDown: 263,
+  shield: 150,
 } as const
 
 export type SnakeThemeKey = 'sunny_circuit' | 'berry_pop' | 'mint_machine'
