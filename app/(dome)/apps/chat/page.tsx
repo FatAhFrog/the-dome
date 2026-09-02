@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import TetrisChampionBadge from '@/components/TetrisChampionBadge'
+import SnakeChampionBadge from '@/components/SnakeChampionBadge'
 import { useDomeSession } from '@/components/DomeSession'
 
 type Message = {
@@ -20,6 +21,7 @@ export default function ChatPage() {
   const [roomId, setRoomId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [champion, setChampion] = useState<{ id: string; enabled: boolean; piece: string | null } | null>(null)
+  const [snakeChampion, setSnakeChampion] = useState<{ id: string; enabled: boolean; colorMode: string; color: string | null } | null>(null)
   const supabase = createClient()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
@@ -48,6 +50,33 @@ export default function ChatPage() {
       })
     }
     loadChampion()
+  }, [supabase])
+
+  useEffect(() => {
+    const loadSnakeChampion = async () => {
+      const { data: top } = await supabase
+        .from('scores')
+        .select('user_id')
+        .eq('game', 'snake')
+        .order('score', { ascending: false })
+        .limit(1)
+        .single()
+      if (!top) return
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('snake_crown_enabled, snake_crown_color_mode, snake_crown_color')
+        .eq('id', top.user_id)
+        .single()
+
+      setSnakeChampion({
+        id: top.user_id,
+        enabled: profile?.snake_crown_enabled ?? true,
+        colorMode: profile?.snake_crown_color_mode || 'default',
+        color: profile?.snake_crown_color || null,
+      })
+    }
+    loadSnakeChampion()
   }, [supabase])
 
   useEffect(() => {
@@ -162,6 +191,7 @@ export default function ChatPage() {
               <p style={{ margin: 0, fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 {msg.profiles?.username || 'Unknown'}
                 {champion?.id === msg.user_id && champion.enabled && <TetrisChampionBadge piece={champion.piece} />}
+                {snakeChampion?.id === msg.user_id && snakeChampion.enabled && <SnakeChampionBadge color={snakeChampion.colorMode === 'custom' ? snakeChampion.color || undefined : undefined} />}
               </p>
               <p style={{ margin: 0 }}>{msg.content}</p>
               <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--color-muted)' }}>{new Date(msg.created_at).toLocaleTimeString()}</p>

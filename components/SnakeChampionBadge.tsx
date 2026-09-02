@@ -1,33 +1,19 @@
 export default function SnakeChampionBadge({ color }: { color?: string }) {
-  const cellPx = 6
-  const shape = [[1, 0], [2, 0], [0, 1], [1, 1]]
-
   return (
-    <span
-      title="Reigning Snake champion"
+    <svg
       aria-label="Reigning Snake champion"
+      role="img"
+      viewBox="0 0 24 24"
       style={{
-        position: 'relative',
         display: 'inline-block',
-        width: 3 * cellPx,
-        height: 2 * cellPx,
+        width: 18,
+        height: 18,
         verticalAlign: 'middle',
       }}
     >
-      {shape.map(([x, y], index) => (
-        <span
-          key={index}
-          style={{
-            position: 'absolute',
-            left: x * cellPx,
-            top: y * cellPx,
-            width: cellPx - 1,
-            height: cellPx - 1,
-            background: color || 'var(--color-accent-secondary)',
-            borderRadius: 1,
-          }}
-        />
-      ))}
-    </span>
+      <title>Reigning Snake champion</title>
+      <path d="M5 8c0-2.2 1.8-4 4-4h5.5a3.5 3.5 0 1 1 0 7H10a2 2 0 1 0 0 4h5c2.2 0 4 1.8 4 4" fill="none" stroke={color || 'var(--color-accent-secondary)'} strokeWidth="3" strokeLinecap="round" />
+      <circle cx="16" cy="7.5" r="0.8" fill={color || 'var(--color-accent-secondary)'} />
+    </svg>
   )
 }
