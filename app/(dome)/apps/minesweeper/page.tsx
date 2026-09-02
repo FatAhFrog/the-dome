@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { useDomeSession } from '@/components/DomeSession'
 
 const ROWS = 9
 const COLS = 9
@@ -56,10 +58,13 @@ const createBoard = (safeRow: number, safeCol: number) => {
 }
 
 export default function MinesweeperPage() {
+  const { user } = useDomeSession()
+  const [supabase] = useState(() => createClient())
   const [board, setBoard] = useState(emptyBoard)
   const [status, setStatus] = useState<GameStatus>('ready')
   const [seconds, setSeconds] = useState(0)
   const [revealedCount, setRevealedCount] = useState(0)
+  const submittedRef = useRef(false)
 
   useEffect(() => {
     if (status !== 'playing') return
@@ -72,6 +77,14 @@ export default function MinesweeperPage() {
     setStatus('ready')
     setSeconds(0)
     setRevealedCount(0)
+    submittedRef.current = false
+  }
+
+  const submitScore = async (elapsedSeconds: number) => {
+    if (!user || submittedRef.current) return
+    submittedRef.current = true
+    const { error } = await supabase.rpc('submit_game_score', { p_game: 'minesweeper', p_score: Math.max(1, elapsedSeconds) })
+    if (error) console.error('[minesweeper] failed to submit score:', error.message, error)
   }
 
   const reveal = (row: number, col: number) => {
@@ -104,7 +117,10 @@ export default function MinesweeperPage() {
     const nextRevealedCount = revealedCount + newlyRevealed
     setRevealedCount(nextRevealedCount)
     setBoard(activeBoard)
-    if (nextRevealedCount === ROWS * COLS - MINE_COUNT) setStatus('won')
+    if (nextRevealedCount === ROWS * COLS - MINE_COUNT) {
+      setStatus('won')
+      void submitScore(seconds)
+    }
   }
 
   const toggleFlag = (event: React.MouseEvent, row: number, col: number) => {
@@ -147,7 +163,7 @@ export default function MinesweeperPage() {
                   cursor: status === 'won' || status === 'lost' ? 'default' : 'pointer',
                 }}
               >
-                {cell.revealed ? (cell.mine ? 'X' : cell.adjacent || '') : cell.flagged ? 'F' : ''}
+                {cell.revealed ? (cell.mine ? 'X' : cell.adjacent || '') : cell.flagged ? '⚑' : ''}
               </button>
             )
           }))}
