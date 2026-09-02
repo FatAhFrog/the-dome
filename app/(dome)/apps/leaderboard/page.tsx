@@ -3,19 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 type ScoreRow = {
   score: number
   created_at: string
-  profiles: { username: string | null } | null
+  username: string | null
 }
 
 type GameKey = 'snake' | 'tetris' | 'dino' | 'minesweeper'
 
 async function getTopScores(supabase: Awaited<ReturnType<typeof createClient>>, game: GameKey) {
-  const ascending = game === 'minesweeper'
-  const { data } = await supabase
-    .from('scores')
-    .select('score, created_at, profiles(username)')
-    .eq('game', game)
-    .order('score', { ascending })
-    .limit(10)
+  const { data } = await supabase.rpc('get_top_scores', { p_game: game })
   return (data as unknown as ScoreRow[]) || []
 }
 
@@ -48,7 +42,7 @@ function ArcadePanel({ title, rows }: { title: string; rows: ScoreRow[] }) {
           {rows.map((row, i) => (
             <div key={i} style={{ display: 'grid', gridTemplateColumns: '3rem 1fr 4rem', fontSize: '0.65rem', color: `color-mix(in srgb, var(${RETRO_COLOR_VARS[i % RETRO_COLOR_VARS.length]}) 68%, var(--color-panel-text))`, marginBottom: '0.9rem', lineHeight: 1.4 }}>
               <span>{ordinal(i + 1)}</span>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.profiles?.username || 'UNKNOWN').toUpperCase()}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '0.5rem' }}>{(row.username || 'UNKNOWN').toUpperCase()}</span>
               <span style={{ textAlign: 'right' }}>{row.score}</span>
             </div>
           ))}

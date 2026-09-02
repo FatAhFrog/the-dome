@@ -25,6 +25,7 @@ export type ThemeDefinition = {
 }
 
 export const THEME_PRICE = 1000
+export const SNAKE_THEME_PRICE = 500
 
 // Fallback used before the DOM/theme has loaded (SSR, first paint, etc).
 export const DEFAULT_PIECE_COLORS: PieceColors = {
@@ -114,18 +115,18 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
   },
   graphite_glow: {
     key: 'graphite_glow',
-    label: 'Graphite Glow',
+    label: 'BumbleBee',
     description: 'Cold gray, mustard yellow, and black contrast for a sharper arcade look.',
     shop: 'snake',
-    background: '#f5f5f5',
+    background: '#000000',
     panelBackground: '#202020',
-    text: '#1a1a1a',
-    panelText: '#f5f5f5',
+    text: '#ffffff',
+    panelText: '#ffffff',
     border: '#4d4d4d',
     accent: '#ffd100',
-    accentSecondary: '#ffffff',
-    onAccent: '#111111',
-    pieces: { I: '#d6d6d6', O: '#ffe032', T: '#ffd100', S: '#333533', Z: '#4d4d4d', J: '#f5f5f5', L: '#9a9a9a' },
+    accentSecondary: '#000000',
+    onAccent: '#000000',
+    pieces: { I: '#eeeeee', O: '#ffe032', T: '#ffd100', S: '#333533', Z: '#4d4d4d', J: '#ffffff', L: '#bdbdbd' },
     price: THEME_PRICE,
   },
   purple_burst: {

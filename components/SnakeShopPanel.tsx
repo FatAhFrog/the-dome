@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { SNAKE_PURCHASABLE_THEME_KEYS, THEMES, THEME_PRICE, ThemeKey } from '@/lib/themes'
+import { SNAKE_PURCHASABLE_THEME_KEYS, THEMES, SNAKE_THEME_PRICE, ThemeKey } from '@/lib/themes'
 import { SNAKE_UPGRADE_PRICES, SnakeUpgrades } from '@/lib/snake/shop'
 
 type Props = {
@@ -71,7 +71,7 @@ export default function SnakeShopPanel({ open, onClose, coins, upgrades, busyKey
                         <button onClick={confirmThemePurchase} disabled={busyKey === `theme:${key}`} style={{ padding: '0.35rem 0.6rem', background: 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>Confirm</button>
                       </div>
                     ) : (
-                      <button onClick={() => startNaming(key)} disabled={coins < THEME_PRICE} style={{ padding: '0.35rem 0.75rem', background: coins < THEME_PRICE ? 'var(--color-border)' : 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: coins < THEME_PRICE ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}>Buy - Coins {THEME_PRICE.toLocaleString()}</button>
+                      <button onClick={() => startNaming(key)} disabled={coins < SNAKE_THEME_PRICE} style={{ padding: '0.35rem 0.75rem', background: coins < SNAKE_THEME_PRICE ? 'var(--color-border)' : 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: coins < SNAKE_THEME_PRICE ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}>Buy - Coins {SNAKE_THEME_PRICE.toLocaleString()}</button>
                     )}
                   </div>
                 )
