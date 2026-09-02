@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { SNAKE_PURCHASABLE_THEME_KEYS, THEMES, THEME_PRICE, ThemeKey } from '@/lib/themes'
 import { SNAKE_UPGRADE_PRICES, SnakeUpgrades } from '@/lib/snake/shop'
 
 type Props = {
@@ -9,9 +11,26 @@ type Props = {
   upgrades: SnakeUpgrades
   busyKey: string | null
   onBuyUpgrade: (key: keyof typeof SNAKE_UPGRADE_PRICES) => void
+  ownedThemeKeys: string[]
+  onBuyTheme: (themeKey: ThemeKey, customName: string) => void
 }
 
-export default function SnakeShopPanel({ open, onClose, coins, upgrades, busyKey, onBuyUpgrade }: Props) {
+export default function SnakeShopPanel({ open, onClose, coins, upgrades, busyKey, onBuyUpgrade, ownedThemeKeys, onBuyTheme }: Props) {
+  const [namingTheme, setNamingTheme] = useState<ThemeKey | null>(null)
+  const [themeName, setThemeName] = useState('')
+
+  const startNaming = (key: ThemeKey) => {
+    setNamingTheme(key)
+    setThemeName(THEMES[key].label)
+  }
+
+  const confirmThemePurchase = () => {
+    if (!namingTheme) return
+    onBuyTheme(namingTheme, themeName.trim() || THEMES[namingTheme].label)
+    setNamingTheme(null)
+    setThemeName('')
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none', transition: 'opacity 0.2s ease', zIndex: 1000 }} />
@@ -30,6 +49,35 @@ export default function SnakeShopPanel({ open, onClose, coins, upgrades, busyKey
           <ShopItem title={`More Apples (Lv. ${upgrades.extraApples})`} description="Adds one more apple that can spawn each round." price={SNAKE_UPGRADE_PRICES.extraApples} owned={false} disabled={coins < SNAKE_UPGRADE_PRICES.extraApples} busy={busyKey === 'extraApples'} onBuy={() => onBuyUpgrade('extraApples')} buyLabel="Buy" />
           <ShopItem title="Slow Down" description="Hold Space to slow time for 5 seconds. Recharges 1 second per apple." price={SNAKE_UPGRADE_PRICES.slowDown} owned={upgrades.slowDown} disabled={coins < SNAKE_UPGRADE_PRICES.slowDown} busy={busyKey === 'slowDown'} onBuy={() => onBuyUpgrade('slowDown')} />
           <ShopItem title="Shield" description="Gives an extra life. It is shown just above the control bar while active." price={SNAKE_UPGRADE_PRICES.shield} owned={upgrades.shield} disabled={coins < SNAKE_UPGRADE_PRICES.shield} busy={busyKey === 'shield'} onBuy={() => onBuyUpgrade('shield')} />
+
+          <div>
+            <h3 style={{ margin: '0 0 0.25rem', fontSize: '1rem' }}>Dome Themes</h3>
+            <p style={{ margin: '0 0 0.75rem', fontSize: '0.8rem', color: 'var(--color-muted)' }}>Buying a theme re-skins the whole Dome, not just Snake. Pick which one is active from your Profile.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {SNAKE_PURCHASABLE_THEME_KEYS.map((key) => {
+                const theme = THEMES[key]
+                const owned = ownedThemeKeys.includes(key)
+                return (
+                  <div key={key} style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                      <span style={{ width: 14, height: 14, borderRadius: '50%', background: theme.accent, display: 'inline-block' }} />
+                      <span style={{ width: 14, height: 14, borderRadius: '50%', background: theme.accentSecondary, display: 'inline-block' }} />
+                      <strong style={{ fontSize: '0.9rem' }}>{theme.label}</strong>
+                    </div>
+                    <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-muted)' }}>{theme.description}</p>
+                    {owned ? <span style={{ fontSize: '0.8rem', color: '#3ddc84', fontWeight: 600 }}>Owned</span> : namingTheme === key ? (
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <input value={themeName} onChange={(e) => setThemeName(e.target.value)} maxLength={30} placeholder="Name this theme" style={{ flex: 1, padding: '0.35rem', border: '1px solid var(--color-border)', borderRadius: '6px', fontSize: '0.85rem' }} />
+                        <button onClick={confirmThemePurchase} disabled={busyKey === `theme:${key}`} style={{ padding: '0.35rem 0.6rem', background: 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>Confirm</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => startNaming(key)} disabled={coins < THEME_PRICE} style={{ padding: '0.35rem 0.75rem', background: coins < THEME_PRICE ? 'var(--color-border)' : 'var(--color-accent)', color: 'var(--color-on-accent)', border: 'none', borderRadius: '6px', cursor: coins < THEME_PRICE ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}>Buy - Coins {THEME_PRICE.toLocaleString()}</button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </>

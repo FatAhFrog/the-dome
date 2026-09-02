@@ -326,7 +326,7 @@ export default function ProfilePage() {
 
         <div>
           <div style={{ marginBottom: '0.25rem', fontSize: '0.9rem', color: 'var(--color-muted)' }}>Dome theme</div>
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-muted)' }}>Buy palettes in the Tetris shop, then pick your favorite here - it re-skins the whole Dome.</p>
+          <p style={{ margin: '0 0 0.5rem', fontSize: '0.8rem', color: 'var(--color-muted)' }}>Buy palettes in either game shop, then pick your favorite here - it re-skins the whole Dome.</p>
           <select value={activeTheme} onChange={(e) => handleThemeChange(e.target.value as ThemeKey)} disabled={themeSaving} style={{ padding: '0.5rem', border: '1px solid var(--color-border)', borderRadius: '6px', width: '100%' }}>
             <option value="dome">{THEMES.dome.label} (default)</option>
             {ownedThemes.map(({ key, name }) => <option key={key} value={key}>{name} ({THEMES[key].label})</option>)}

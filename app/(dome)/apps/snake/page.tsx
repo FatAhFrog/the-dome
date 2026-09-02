@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useDomeSession } from '@/components/DomeSession'
-import { readCssVar, THEME_CHANGE_EVENT } from '@/lib/themes'
+import { readCssVar, THEME_CHANGE_EVENT, THEME_PRICE, ThemeKey } from '@/lib/themes'
 import GameCanvasFrame from '@/components/GameCanvasFrame'
 import SnakeShopPanel from '@/components/SnakeShopPanel'
 import { SNAKE_UPGRADE_PRICES, SnakeUpgrades } from '@/lib/snake/shop'
@@ -50,6 +50,7 @@ export default function SnakePage() {
   const [paused, setPaused] = useState(false)
   const [coins, setCoins] = useState(0)
   const [upgrades, setUpgrades] = useState<SnakeUpgrades>({ extraApples: 0, slowDown: false, shield: false })
+  const [ownedThemeKeys, setOwnedThemeKeys] = useState<string[]>([])
   const [shopOpen, setShopOpen] = useState(false)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -84,6 +85,8 @@ export default function SnakePage() {
       setCoins(profile?.snake_coins ?? 0)
       setUpgrades({ extraApples: profile?.snake_extra_apples ?? 0, slowDown: profile?.snake_slow_down ?? false, shield: profile?.snake_shield ?? false })
       setShieldAvailable(profile?.snake_shield ?? false)
+      const { data: purchases } = await supabase.from('theme_purchases').select('theme_key').eq('user_id', user.id)
+      setOwnedThemeKeys((purchases || []).map((purchase) => purchase.theme_key))
     }
     loadSnakeShop()
   }, [supabase, user])
@@ -229,6 +232,23 @@ export default function SnakePage() {
       setUpgrades(next)
       if (key === 'shield') setShieldAvailable(true)
       setSyncError(null)
+    }
+    setBusyKey(null)
+  }
+
+  const buyTheme = async (themeKey: ThemeKey, customName: string) => {
+    if (!user || busyKey || coins < THEME_PRICE || ownedThemeKeys.includes(themeKey)) return
+    setBusyKey(`theme:${themeKey}`)
+    const balance = await spendCoins(THEME_PRICE)
+    if (balance === null) { setBusyKey(null); return }
+    const { error } = await supabase.from('theme_purchases').insert({ user_id: user.id, theme_key: themeKey, custom_name: customName })
+    if (!error) {
+      setOwnedThemeKeys((keys) => [...keys, themeKey])
+      setSyncError(null)
+    } else {
+      await earnCoins(THEME_PRICE)
+      setCoins(balance + THEME_PRICE)
+      setSyncError(`Theme purchase didn't save: ${error.message}`)
     }
     setBusyKey(null)
   }
@@ -379,7 +399,7 @@ export default function SnakePage() {
       </div>
 
       <p style={{ marginTop: '1rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>Use arrow keys to move · Hold Space to slow down · P pause</p>
-      {shopOpen && <SnakeShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} busyKey={busyKey} onBuyUpgrade={buyUpgrade} />}
+      {shopOpen && <SnakeShopPanel open={shopOpen} onClose={() => setShopOpen(false)} coins={coins} upgrades={upgrades} busyKey={busyKey} onBuyUpgrade={buyUpgrade} ownedThemeKeys={ownedThemeKeys} onBuyTheme={buyTheme} />}
     </main>
   )
 }
